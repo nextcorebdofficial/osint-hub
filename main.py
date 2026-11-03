@@ -37,6 +37,8 @@ def _load_dotenv() -> None:
 
 _load_dotenv()
 
+BRAND = os.environ.get("BRAND_NAME", "").strip() or "NextCore BD"
+
 
 def auth_mode() -> str:
     """'accounts' (email + password, set AUTH_MODE=accounts), 'password' (one shared APP_PASSWORD) or 'none'."""
@@ -64,6 +66,7 @@ def serverless() -> bool:
 import auth  # noqa: E402  (needs env loaded first)
 import db  # noqa: E402
 import extras  # noqa: E402
+import mailer  # noqa: E402
 import lookups  # noqa: E402
 import report  # noqa: E402
 
@@ -71,13 +74,19 @@ import report  # noqa: E402
 _docs = {} if auth_mode() != "accounts" else {"docs_url": None, "redoc_url": None, "openapi_url": None}
 app = FastAPI(title="OSINT Hub", **_docs)
 templates = Jinja2Templates(directory=str(BASE / "templates"))
+def operator_name() -> str:
+    """Who runs this instance. Defaults to the brand so the legal pages are never anonymous."""
+    return os.environ.get("OPERATOR_NAME", "").strip() or BRAND
+
+
 REPO_URL = os.environ.get("REPO_URL", "https://github.com/nextcorebdofficial/osint-hub")
 
 
 def page(request: Request, name: str, ctx: dict | None = None, status: int = 200):
     """Render a template with the per-request CSP nonce every inline script and style tag needs."""
     return templates.TemplateResponse(
-        request, name, {"nonce": getattr(request.state, "nonce", ""), **(ctx or {})}, status_code=status)
+        request, name, {"nonce": getattr(request.state, "nonce", ""), "brand": BRAND, **(ctx or {})},
+        status_code=status)
 
 
 # ---------------------------------------------------------------- catalog
@@ -318,7 +327,8 @@ async def guard(request: Request, call_next):
 
 
 OPEN_PATHS = {"/login", "/api/health", "/robots.txt", "/.well-known/security.txt"}
-ACCOUNT_PUBLIC = {"/", "/register"}
+ACCOUNT_PUBLIC = {"/", "/register", "/verify", "/resend", "/forgot", "/reset"}
+AUTH_POSTS = ("/login", "/register", "/resend", "/forgot", "/reset")
 
 
 def _same_origin(request: Request) -> bool:
@@ -381,7 +391,7 @@ async def _gate(request: Request, call_next):
     if path.startswith(("/api/cases", "/api/items")) and not cases_enabled():
         return JSONResponse({"detail": "saved cases are turned off on this instance"}, status_code=403)
 
-    login_post = method == "POST" and path in ("/login", "/register")
+    login_post = method == "POST" and path in AUTH_POSTS
     heavy = method == "POST" and path in ("/api/investigate", "/api/jobs", "/api/toolbox/exif")
     if login_post:
         bucket, limit = "auth", int(os.environ.get("RATE_LIMIT_AUTH", "10"))
@@ -440,7 +450,45 @@ def accounts_problem() -> str:
         return "APP_SECRET is not set"
     if db.backend() == "sqlite-temp" and not os.environ.get("ALLOW_TEMP_ACCOUNTS"):
         return "no persistent database: set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN"
+    if serverless() and not os.environ.get("PUBLIC_URL"):
+        return "PUBLIC_URL is not set (links in emails must not depend on the Host header)"
+    if not mailer.configured() and not os.environ.get("ALLOW_UNVERIFIED"):
+        return "email sending is not configured: set MAIL_PROVIDER, MAIL_FROM and MAIL_API_KEY (or ALLOW_UNVERIFIED=1)"
     return ""
+
+
+def public_url(request: Request) -> str:
+    # Never build email links from the Host header on a public host: that allows password-reset poisoning.
+    return (os.environ.get("PUBLIC_URL", "").strip().rstrip("/")) or str(request.base_url).rstrip("/")
+
+
+_MAILS: dict[str, list[float]] = {}
+
+
+def _mail_ok(email: str) -> bool:
+    """At most 3 emails per address per hour, so nobody can use us to flood an inbox."""
+    now = time.time()
+    recent = [x for x in _MAILS.get(email, []) if now - x < 3600]
+    if len(_MAILS) > 5000:
+        _MAILS.clear()
+    if len(recent) >= 3:
+        _MAILS[email] = recent
+        return False
+    _MAILS[email] = recent + [now]
+    return True
+
+
+async def _send_link(request: Request, user: dict, kind: str) -> None:
+    if not _mail_ok(user["email"]):
+        return
+    link = f"{public_url(request)}/{kind}?token={auth.make_link_token(SECRET, kind, user)}"
+    if kind == "verify":
+        subject, lead, ttl = f"Confirm your email for {BRAND}", "Confirm your email address to finish creating your account.", "48 hours"
+    else:
+        subject, lead, ttl = f"Reset your {BRAND} password", "Someone asked to reset the password for this account. If that was you, choose a new one.", "1 hour"
+    text = (f"{lead}\n\n{link}\n\nThe link works for {ttl}. If you did not ask for this, ignore this email; "
+            f"nothing changes.\n\n{BRAND}\n")
+    await asyncio.to_thread(mailer.send, user["email"], subject, text)
 
 
 def _auth_page(request: Request, name: str, error: str = "", status: int = 200):
@@ -449,7 +497,7 @@ def _auth_page(request: Request, name: str, error: str = "", status: int = 200):
         print("ACCOUNTS UNAVAILABLE: " + problem, flush=True)
     return page(request, name, {
         "error": error, "mode": auth_mode(), "unavailable": bool(problem),
-        "registration": registration_mode(), "operator": os.environ.get("OPERATOR_NAME", "").strip()}, status)
+        "registration": registration_mode(), "operator": operator_name()}, status)
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -487,6 +535,11 @@ async def login(request: Request, password: str = Form(""), email: str = Form(""
             _FAILS.setdefault(email, []).append(time.time())
         return _auth_page(request, "login.html", "Wrong email or password.", 401)
     _FAILS.pop(email, None)
+    if mailer.configured() and not user.get("verified"):
+        return page(request, "message.html", {
+            "title": "Confirm your email first",
+            "message": "Your account is not active yet. Open the link we emailed you, or ask for a new one below.",
+            "link": ("/login", "Back to sign in"), "resend_email": email}, 403)
     resp = RedirectResponse("/app", status_code=303)
     _set_session(resp, request, auth.make_session(SECRET, user))
     return resp
@@ -520,9 +573,108 @@ async def register(request: Request, email: str = Form(""), password: str = Form
     uid = db.create_user(email, auth.hash_password(password), time.time())
     if uid is None:
         return _auth_page(request, "register.html", "This email is already registered. Sign in instead.", 409)
+    user = db.get_user(uid)
+    if mailer.configured():
+        await _send_link(request, user, "verify")
+        return _auth_page_msg(request, "Check your email",
+                              "We sent a confirmation link to your address. Open it to activate your account. "
+                              "It can take a minute; look in the spam folder too.")
+    db.set_verified(uid)  # self-hosted without email (ALLOW_UNVERIFIED)
     resp = RedirectResponse("/app", status_code=303)
     _set_session(resp, request, auth.make_session(SECRET, db.get_user(uid)))
     return resp
+
+
+def _auth_page_msg(request: Request, title: str, message: str, status: int = 200, link=("/login", "Sign in")):
+    return page(request, "message.html", {"title": title, "message": message, "link": link}, status)
+
+
+@app.get("/verify", response_class=HTMLResponse)
+async def verify(request: Request, token: str = ""):
+    uid = auth.link_token_uid(token)
+    user = db.get_user(uid) if uid else None
+    if not user or not auth.link_token_valid(SECRET, "verify", token, user):
+        return _auth_page_msg(request, "Link not valid",
+                              "This confirmation link is invalid or has expired. Sign in to get a new one.", 400)
+    db.set_verified(user["id"])
+    _USERS.pop(user["id"], None)
+    resp = RedirectResponse("/app", status_code=303)
+    _set_session(resp, request, auth.make_session(SECRET, user))
+    return resp
+
+
+@app.post("/resend")
+async def resend(request: Request, email: str = Form("")):
+    if auth_mode() != "accounts":
+        raise HTTPException(404, "not found")
+    try:
+        user = db.get_user_by_email(auth.clean_email(email))
+    except ValueError:
+        user = None
+    if user and not user.get("verified") and mailer.configured():
+        await _send_link(request, user, "verify")
+    return _auth_page_msg(request, "Check your email",
+                          "If that address has an account waiting for confirmation, we sent a new link.")
+
+
+@app.get("/forgot", response_class=HTMLResponse)
+async def forgot_page(request: Request):
+    if auth_mode() != "accounts":
+        raise HTTPException(404, "not found")
+    return page(request, "forgot.html", {})
+
+
+@app.post("/forgot")
+async def forgot(request: Request, email: str = Form("")):
+    if auth_mode() != "accounts":
+        raise HTTPException(404, "not found")
+    try:
+        user = db.get_user_by_email(auth.clean_email(email))
+    except ValueError:
+        user = None
+    if user and mailer.configured():
+        await _send_link(request, user, "reset")
+    # Same answer whether or not the address exists, so this cannot be used to find accounts.
+    return _auth_page_msg(request, "Check your email",
+                          "If that address has an account, we sent a link to choose a new password. It works for 1 hour.")
+
+
+def _reset_user(token: str) -> dict | None:
+    uid = auth.link_token_uid(token)
+    user = db.get_user(uid) if uid else None
+    return user if user and auth.link_token_valid(SECRET, "reset", token, user) else None
+
+
+@app.get("/reset", response_class=HTMLResponse)
+async def reset_page(request: Request, token: str = ""):
+    if auth_mode() != "accounts":
+        raise HTTPException(404, "not found")
+    if not _reset_user(token):
+        return _auth_page_msg(request, "Link not valid", "This reset link is invalid, already used or has expired.",
+                              400, ("/forgot", "Ask for a new link"))
+    return page(request, "reset.html", {"token": token, "error": ""})
+
+
+@app.post("/reset")
+async def reset(request: Request, token: str = Form(""), password: str = Form(""), password2: str = Form("")):
+    if auth_mode() != "accounts":
+        raise HTTPException(404, "not found")
+    user = _reset_user(token)
+    if not user:
+        return _auth_page_msg(request, "Link not valid", "This reset link is invalid, already used or has expired.",
+                              400, ("/forgot", "Ask for a new link"))
+    try:
+        if password != password2:
+            raise ValueError("The two passwords do not match.")
+        auth.check_password(password, user["email"])
+    except ValueError as e:
+        return page(request, "reset.html", {"token": token, "error": str(e)}, 400)
+    db.set_password(user["id"], auth.hash_password(password))
+    db.set_verified(user["id"])  # they proved they own the address
+    _USERS.pop(user["id"], None)
+    _FAILS.pop(user["email"], None)
+    return _auth_page_msg(request, "Password changed", "You can now sign in with your new password. "
+                          "Any older sessions were signed out.")
 
 
 @app.post("/logout")
@@ -624,7 +776,7 @@ async def legal(request: Request, name: str):
         raise HTTPException(404, "unknown page")
     title, fname = LEGAL[name]
     text = (BASE / "docs" / "legal" / fname).read_text(encoding="utf-8")
-    op = os.environ.get("OPERATOR_NAME", "").strip()
+    op = operator_name()
     contact = os.environ.get("OPERATOR_CONTACT", "").strip()
     law = os.environ.get("OPERATOR_JURISDICTION", "").strip()
     text = (text.replace("[OPERATOR_NAME]", op or "[OPERATOR_NAME]")
@@ -642,7 +794,7 @@ async def index(request: Request):
     if auth_mode() == "accounts":
         return page(request, "landing.html", {
             "total": len(TOOLS), "categories": len(CATEGORIES), "types": len(TARGET_CATEGORIES),
-            "registration": registration_mode(), "operator": os.environ.get("OPERATOR_NAME", "").strip(),
+            "registration": registration_mode(), "operator": operator_name(),
             "repo": REPO_URL, "signed_in": request.state.user is not None,
             "retention": int(os.environ.get("CASE_RETENTION_DAYS") or 0)})
     return await app_page(request)
@@ -666,7 +818,7 @@ async def config(request: Request):
             "encode_ops": list(extras.OPS), "target_types": list(TARGET_CATEGORIES),
             "purposes": PURPOSES, "serverless": serverless(), "storage": db.backend(),
             "cases": cases_enabled(),
-            "operator": os.environ.get("OPERATOR_NAME", "").strip(),
+            "operator": operator_name(), "daily_limit": daily_limit() if _uid_mode() else 0,
             "retention_days": int(os.environ.get("CASE_RETENTION_DAYS") or 0)}
 
 
@@ -694,6 +846,26 @@ async def tools(q: str = "", category: str = "", pricing: str = "", flag: str = 
 
 # ---------------------------------------------------------------- routes: investigations
 
+def _uid_mode() -> bool:
+    return auth_mode() == "accounts"
+
+
+def daily_limit() -> int:
+    try:
+        return max(0, int(os.environ.get("DAILY_INVESTIGATIONS", "100")))
+    except ValueError:
+        return 100
+
+
+def _count_usage(request: Request) -> None:
+    """Per-account daily cap, so one account cannot hammer the free sources we depend on. 0 turns it off."""
+    uid, limit = _uid(request), daily_limit()
+    if uid is None or not limit:
+        return
+    if not db.bump_usage(uid, time.strftime("%Y-%m-%d", time.gmtime()), limit):
+        raise HTTPException(429, f"Daily limit reached ({limit} investigations per day). Try again tomorrow.")
+
+
 def _parse_target(payload: dict) -> tuple[str, str]:
     value = str(payload.get("value", "")).strip()
     if not value:
@@ -704,8 +876,9 @@ def _parse_target(payload: dict) -> tuple[str, str]:
 
 
 @app.post("/api/investigate")
-async def investigate(payload: dict):
+async def investigate(request: Request, payload: dict):
     kind, value = _parse_target(payload)
+    _count_usage(request)
     _audit(kind, value, payload["purpose"])
     try:
         return await run_investigation(kind, value, payload, {})
@@ -714,7 +887,7 @@ async def investigate(payload: dict):
 
 
 @app.post("/api/jobs")
-async def start_job(payload: dict):
+async def start_job(request: Request, payload: dict):
     kind, value = _parse_target(payload)
     if kind not in TARGET_CATEGORIES:
         raise HTTPException(400, f"unknown type {kind}")
@@ -722,6 +895,7 @@ async def start_job(payload: dict):
         normalize(kind, value)
     except ValueError as e:
         raise HTTPException(400, str(e))
+    _count_usage(request)
     _audit(kind, value, payload["purpose"])
     if len(JOBS) >= 200:
         JOBS.pop(next(iter(JOBS)))

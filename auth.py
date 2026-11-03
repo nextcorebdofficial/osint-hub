@@ -91,3 +91,39 @@ def session_valid(secret: str, token: str, user: dict) -> bool:
                 and hmac.compare_digest(sig, _sig(secret, user["id"], int(exp), fingerprint(user))))
     except (ValueError, AttributeError):
         return False
+
+
+# ---------------------------------------------------------------- email links (verify, reset)
+# Signed and stateless. A reset token is bound to the current password hash, so it works once:
+# after the password changes it no longer matches.
+
+LINK_HOURS = {"verify": 48, "reset": 1}
+
+
+def _link_binding(kind: str, user: dict) -> str:
+    return user["email"] if kind == "verify" else fingerprint(user)
+
+
+def make_link_token(secret: str, kind: str, user: dict) -> str:
+    exp = int(time.time()) + LINK_HOURS[kind] * 3600
+    sig = hmac.new(secret.encode(), f"{kind}.{user['id']}.{exp}.{_link_binding(kind, user)}".encode(),
+                   hashlib.sha256).hexdigest()
+    return f"{user['id']}.{exp}.{sig}"
+
+
+def link_token_uid(token: str) -> int | None:
+    try:
+        uid, exp, _ = token.split(".")
+        return int(uid) if int(exp) > time.time() else None
+    except (ValueError, AttributeError):
+        return None
+
+
+def link_token_valid(secret: str, kind: str, token: str, user: dict) -> bool:
+    try:
+        uid, exp, sig = token.split(".")
+        want = hmac.new(secret.encode(), f"{kind}.{uid}.{exp}.{_link_binding(kind, user)}".encode(),
+                        hashlib.sha256).hexdigest()
+        return int(uid) == user["id"] and int(exp) > time.time() and hmac.compare_digest(sig, want)
+    except (ValueError, AttributeError):
+        return False

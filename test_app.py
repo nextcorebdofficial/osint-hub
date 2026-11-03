@@ -334,6 +334,9 @@ def accounts(monkeypatch):
     monkeypatch.setenv("DB_PATH", os.path.join(tempfile.mkdtemp(), "acc.db"))
     monkeypatch.delenv("APP_PASSWORD", raising=False)
     monkeypatch.delenv("REGISTRATION", raising=False)
+    monkeypatch.setenv("ALLOW_UNVERIFIED", "1")  # no email provider in tests unless a test turns one on
+    for k in ("MAIL_PROVIDER", "MAIL_FROM", "MAIL_API_KEY", "PUBLIC_URL", "DAILY_INVESTIGATIONS"):
+        monkeypatch.delenv(k, raising=False)
     main._HITS.clear()
     main._FAILS.clear()
     main._USERS.clear()
@@ -447,6 +450,7 @@ def test_accounts_refuse_to_start_without_a_persistent_database(accounts, monkey
     assert main.accounts_problem().startswith("no persistent database")
     assert _signup(accounts()).status_code == 503
     monkeypatch.setenv("ALLOW_TEMP_ACCOUNTS", "1")
+    monkeypatch.setenv("PUBLIC_URL", "https://hub.example.org")
     assert main.accounts_problem() == ""
 
 
@@ -519,3 +523,171 @@ def test_robots_and_security_txt(monkeypatch):
     monkeypatch.setenv("OPERATOR_CONTACT", "security@example.org")
     body = client.get("/.well-known/security.txt").text
     assert "Contact: mailto:security@example.org" in body and "Expires:" in body
+
+
+# ---------------------------------------------------------------- email verification, reset, limits
+
+@pytest.fixture
+def mailbox(accounts, monkeypatch):
+    """Accounts with email turned on; every message lands in a list instead of the network."""
+    sent = []
+    monkeypatch.delenv("ALLOW_UNVERIFIED", raising=False)
+    monkeypatch.setenv("MAIL_PROVIDER", "resend")
+    monkeypatch.setenv("MAIL_API_KEY", "k")
+    monkeypatch.setenv("MAIL_FROM", "NextCore BD <no-reply@example.org>")
+    monkeypatch.setenv("PUBLIC_URL", "https://hub.example.org")
+    monkeypatch.setattr(main.mailer, "send", lambda to, subject, text, html="": sent.append((to, subject, text)) or True)
+    main._MAILS.clear()
+    return accounts, sent
+
+
+def _link(sent, i=-1):
+    import re
+    return re.search(r"https://hub\.example\.org(/\S+)", sent[i][2]).group(1)
+
+
+def test_signup_sends_a_link_and_needs_it_before_login(mailbox):
+    make, sent = mailbox
+    c = make()
+    r = _signup(c)
+    assert r.status_code == 200 and "Check your email" in r.text  # no session yet
+    assert c.get("/api/tools").status_code == 401
+    assert sent[-1][0] == "a@example.com" and "NextCore BD" in sent[-1][1]
+    blocked = c.post("/login", data={"email": "a@example.com", "password": PW})
+    assert blocked.status_code == 403 and "Confirm your email first" in blocked.text
+    ok = c.get(_link(sent), follow_redirects=False)
+    assert ok.status_code == 303 and ok.headers["location"] == "/app"
+    assert c.get("/api/tools").status_code == 200
+    c.post("/logout")
+    assert c.post("/login", data={"email": "a@example.com", "password": PW}, follow_redirects=False).status_code == 303
+
+
+def test_verification_link_is_bound_to_the_address_and_expires(mailbox):
+    import auth
+    make, sent = mailbox
+    _signup(make())
+    user = db.get_user_by_email("a@example.com")
+    tok = auth.make_link_token(main.SECRET, "verify", user)
+    assert auth.link_token_valid(main.SECRET, "verify", tok, user)
+    assert not auth.link_token_valid(main.SECRET, "reset", tok, user)  # a verify link cannot reset a password
+    assert not auth.link_token_valid("other", "verify", tok, user)
+    uid, exp, sig = tok.split(".")
+    assert not auth.link_token_valid(main.SECRET, "verify", f"{uid}.1.{sig}", user)
+    assert make().get("/verify?token=junk").status_code == 400
+
+
+def test_password_reset_works_once_and_signs_out_old_sessions(mailbox):
+    make, sent = mailbox
+    c = make()
+    _signup(c)
+    c.get(_link(sent))
+    assert c.get("/api/tools").status_code == 200
+    r = make().post("/forgot", data={"email": "a@example.com"})
+    assert "If that address has an account" in r.text and len(sent) == 2
+    link = _link(sent)
+    assert "/reset?token=" in link
+    other = make()
+    assert other.get(link).status_code == 200
+    new = "a brand new passphrase"
+    assert other.post("/reset", data={"token": link.split("=")[1], "password": new, "password2": new}).status_code == 200
+    assert c.get("/api/tools").status_code == 401  # the old session died with the old password
+    assert other.get(link).status_code == 400  # the link cannot be used twice
+    assert make().post("/login", data={"email": "a@example.com", "password": PW}).status_code == 401
+    assert make().post("/login", data={"email": "a@example.com", "password": new}, follow_redirects=False).status_code == 303
+
+
+def test_forgot_does_not_reveal_whether_an_account_exists(mailbox):
+    make, sent = mailbox
+    a = make().post("/forgot", data={"email": "nobody@example.com"})
+    _signup(make())
+    n = len(sent)
+    b = make().post("/forgot", data={"email": "a@example.com"})
+    import re
+    strip = lambda s: re.sub(r'nonce="[^"]+"', "", s)  # the CSP nonce differs on every response
+    assert a.status_code == b.status_code == 200 and strip(a.text) == strip(b.text)
+    assert len(sent) == n + 1  # only the real address got a message
+
+
+def test_emails_to_one_address_are_throttled(mailbox):
+    make, sent = mailbox
+    _signup(make())
+    for _ in range(6):
+        make().post("/forgot", data={"email": "a@example.com"})
+    assert len(sent) == 3  # signup mail + two more, then the hourly cap
+
+
+def test_email_links_never_use_the_host_header(mailbox):
+    make, sent = mailbox
+    make().post("/register", data={"email": "x@example.com", "password": PW, "password2": PW, "terms": "on"},
+                headers={"host": "evil.example"})
+    assert "evil.example" not in sent[-1][2] and "hub.example.org" in sent[-1][2]
+
+
+def test_public_hosts_need_a_fixed_public_url(accounts, monkeypatch):
+    monkeypatch.setenv("VERCEL", "1")
+    monkeypatch.setenv("APP_SECRET", "x" * 32)
+    monkeypatch.setenv("ALLOW_TEMP_ACCOUNTS", "1")
+    monkeypatch.delenv("PUBLIC_URL", raising=False)
+    assert "PUBLIC_URL" in main.accounts_problem()
+
+
+def test_signup_is_unavailable_without_email_unless_allowed(accounts, monkeypatch):
+    monkeypatch.delenv("ALLOW_UNVERIFIED")
+    monkeypatch.delenv("MAIL_PROVIDER", raising=False)
+    assert "email sending is not configured" in main.accounts_problem()
+    assert _signup(accounts()).status_code == 503
+
+
+def test_daily_investigation_limit(accounts, monkeypatch):
+    monkeypatch.setenv("DAILY_INVESTIGATIONS", "2")
+    c = accounts()
+    _signup(c)
+    body = {"value": "+8801712345678", "purpose": P}
+    codes = [c.post("/api/investigate", json=body).status_code for _ in range(3)]
+    assert codes == [200, 200, 429]
+    assert c.get("/api/config").json()["daily_limit"] == 2
+    monkeypatch.setenv("DAILY_INVESTIGATIONS", "0")  # 0 switches the cap off
+    assert c.post("/api/investigate", json=body).status_code == 200
+
+
+def test_mailer_providers_build_the_right_requests(monkeypatch):
+    import mailer
+    calls = []
+
+    class R:
+        status_code = 202
+
+    monkeypatch.setattr(mailer.httpx, "post", lambda url, **kw: calls.append((url, kw)) or R())
+    monkeypatch.setenv("MAIL_FROM", "NextCore BD <no-reply@example.org>")
+    monkeypatch.setenv("MAIL_API_KEY", "secret")
+    monkeypatch.setenv("MAIL_PROVIDER", "resend")
+    assert mailer.send("u@example.com", "Hi", "body") is True
+    assert calls[-1][0] == "https://api.resend.com/emails"
+    assert calls[-1][1]["headers"]["Authorization"] == "Bearer secret"
+    assert calls[-1][1]["json"]["to"] == ["u@example.com"]
+    monkeypatch.setenv("MAIL_PROVIDER", "brevo")
+    assert mailer.send("u@example.com", "Hi", "body") is True
+    assert calls[-1][0] == "https://api.brevo.com/v3/smtp/email"
+    assert calls[-1][1]["json"]["sender"] == {"name": "NextCore BD", "email": "no-reply@example.org"}
+    monkeypatch.setenv("MAIL_PROVIDER", "none")
+    assert mailer.send("u@example.com", "Hi", "body") is False  # unconfigured never raises
+
+
+def test_brand_appears_on_public_pages(accounts):
+    c = accounts()
+    assert "NextCore BD" in c.get("/").text
+    assert "NextCore BD" in c.get("/login").text
+    assert "NextCore BD" in c.get("/legal/privacy").text
+
+
+def test_accounts_and_usage_work_on_turso(monkeypatch):
+    _fake_turso(monkeypatch)
+    uid = db.create_user("t@example.com", "hash", 1.0)
+    assert uid and db.create_user("t@example.com", "hash", 1.0) is None
+    assert db.get_user_by_email("t@example.com")["verified"] is None
+    assert db.set_verified(uid) and not db.set_verified(uid)
+    assert [db.bump_usage(uid, "2026-11-03", 2) for _ in range(3)] == [True, True, False]
+    assert db.bump_usage(uid, "2026-11-04", 2)  # a new day starts again
+    cid = db.create_case("c", uid)["id"]
+    assert db.get_case(cid, uid)["name"] == "c" and db.get_case(cid, uid + 1) is None
+    assert db.delete_user(uid) and db.get_user(uid) is None and db.list_cases(uid) == []

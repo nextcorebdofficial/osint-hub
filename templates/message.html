@@ -1,0 +1,13 @@
+{% extends "auth_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block body %}
+<h1>{{ title }}</h1>
+<p class="sub">{{ message }}</p>
+{% if resend_email %}
+<form method="post" action="/resend">
+  <input type="hidden" name="email" value="{{ resend_email }}">
+  <button>Send a new confirmation link</button>
+</form>
+{% endif %}
+<p class="alt"><a href="{{ link[0] }}">{{ link[1] }}</a></p>
+{% endblock %}

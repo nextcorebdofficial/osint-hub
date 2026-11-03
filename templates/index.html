@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OSINT Hub</title>
+<title>OSINT Hub by {{ brand }}</title>
 <style nonce="{{ nonce }}">
   :root{--bg:#f6f7f9;--card:#fff;--text:#1b1f24;--muted:#5d6672;--line:#dde1e6;--accent:#1f6feb;--ok:#1a7f37;--warn:#9a6700;--bad:#cf222e}
   @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1116;--card:#161b22;--text:#e6edf3;--muted:#8b949e;--line:#2b323b;--accent:#4493f8;--ok:#3fb950;--warn:#d29922;--bad:#f85149}}
@@ -65,7 +65,7 @@
 <body>
 <header>
   <div class="top">
-    <h1>OSINT Hub <small>{{ total }} tools &middot; {{ categories|length }} categories</small></h1>
+    <h1>OSINT Hub <small>by {{ brand }} &middot; {{ total }} tools &middot; {{ categories|length }} categories</small></h1>
     <div class="row" style="margin:0">
       <span id="keys" class="muted" style="font-size:12px"></span>
       <span id="acct" class="muted" style="font-size:12px"></span>

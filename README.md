@@ -135,7 +135,7 @@ Use it lawfully, and only on targets you are entitled to investigate.
 
 ## Deploying
 
-Docker, a VPS or **Vercel** all work. Step by step for Vercel with your own domain: [docs/DEPLOY_VERCEL.md](docs/DEPLOY_VERCEL.md) ([বাংলা](docs/DEPLOY_VERCEL.bn.md)).
+Docker, a VPS or **Vercel** all work. For a public service with sign-up, set `AUTH_MODE=accounts` (see [configuration](docs/CONFIGURATION.md)); the whole stack can run on free tiers. Step by step for Vercel with your own domain: [docs/DEPLOY_VERCEL.md](docs/DEPLOY_VERCEL.md) ([বাংলা](docs/DEPLOY_VERCEL.bn.md)).
 
 ## Known limitations
 

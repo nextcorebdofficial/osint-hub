@@ -28,7 +28,14 @@ SCHEMA = [
     email TEXT NOT NULL UNIQUE,
     pw TEXT NOT NULL,
     created REAL NOT NULL,
-    terms REAL NOT NULL
+    terms REAL NOT NULL,
+    verified REAL
+)""",
+    """CREATE TABLE IF NOT EXISTS usage (
+    uid INTEGER NOT NULL,
+    day TEXT NOT NULL,
+    n INTEGER NOT NULL,
+    PRIMARY KEY (uid, day)
 )""",
     """CREATE TABLE IF NOT EXISTS items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -114,6 +121,13 @@ def _turso_run(stmts: list[tuple[str, tuple]]) -> list[dict]:
             _http_post(url, token, {"requests": [
                 {"type": "execute", "stmt": {"sql": "ALTER TABLE cases ADD COLUMN user_id INTEGER"}},
                 {"type": "close"}]})
+        ucols = _http_post(url, token, {"requests": [
+            {"type": "execute", "stmt": {"sql": "PRAGMA table_info(users)"}}, {"type": "close"}]})
+        if "verified" not in [row[1].get("value") for row in
+                              ucols["results"][0]["response"]["result"].get("rows", [])]:
+            _http_post(url, token, {"requests": [
+                {"type": "execute", "stmt": {"sql": "ALTER TABLE users ADD COLUMN verified REAL"}},
+                {"type": "close"}]})
         _turso_ready.add(url)
     body = {"requests": [
         {"type": "execute", "stmt": {"sql": sql, "args": [_arg(a) for a in args]}} for sql, args in stmts
@@ -147,6 +161,8 @@ def _run(stmts: list[tuple[str, tuple]]) -> list[dict]:
             c.execute(sql)
         if "user_id" not in [r[1] for r in c.execute("PRAGMA table_info(cases)")]:
             c.execute("ALTER TABLE cases ADD COLUMN user_id INTEGER")  # created before accounts existed
+        if "verified" not in [r[1] for r in c.execute("PRAGMA table_info(users)")]:
+            c.execute("ALTER TABLE users ADD COLUMN verified REAL")  # created before email verification
         for sql, args in stmts:
             cur = c.execute(sql, args)
             out.append({"rows": [dict(r) for r in cur.fetchall()] if cur.description else [],
@@ -238,6 +254,21 @@ def create_user(email: str, pw_hash: str, terms_at: float) -> int | None:
     return r["lastrowid"] if r["rowcount"] else None
 
 
+def set_verified(uid: int) -> bool:
+    return _one("UPDATE users SET verified = ? WHERE id = ? AND verified IS NULL", (time.time(), uid))["rowcount"] > 0
+
+
+def set_password(uid: int, pw_hash: str) -> bool:
+    return _one("UPDATE users SET pw = ? WHERE id = ?", (pw_hash, uid))["rowcount"] > 0
+
+
+def bump_usage(uid: int, day: str, limit: int) -> bool:
+    """Count one investigation for `uid` on `day` (YYYY-MM-DD). False when the daily limit is already used up."""
+    r = _one("INSERT INTO usage (uid, day, n) VALUES (?, ?, 1) "
+             "ON CONFLICT(uid, day) DO UPDATE SET n = n + 1 WHERE n < ?", (uid, day, limit))
+    return r["rowcount"] > 0
+
+
 def get_user_by_email(email: str) -> dict | None:
     rows = _one("SELECT * FROM users WHERE email = ?", (email,))["rows"]
     return rows[0] if rows else None
@@ -252,12 +283,13 @@ def delete_user(uid: int) -> bool:
     """Remove the account and everything it saved."""
     r = _run([("DELETE FROM items WHERE case_id IN (SELECT id FROM cases WHERE user_id = ?)", (uid,)),
               ("DELETE FROM cases WHERE user_id = ?", (uid,)),
+              ("DELETE FROM usage WHERE uid = ?", (uid,)),
               ("DELETE FROM users WHERE id = ?", (uid,))])
-    return r[2]["rowcount"] > 0
+    return r[3]["rowcount"] > 0
 
 
 def export_user(uid: int) -> dict:
     user = get_user(uid) or {}
     cases = [get_case(c["id"], uid) for c in list_cases(uid)]
-    return {"email": user.get("email"), "created": user.get("created"),
+    return {"email": user.get("email"), "created": user.get("created"), "verified": user.get("verified"),
             "terms_accepted": user.get("terms"), "cases": cases}

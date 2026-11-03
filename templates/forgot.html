@@ -1,0 +1,12 @@
+{% extends "auth_base.html" %}
+{% block title %}Forgot password{% endblock %}
+{% block body %}
+<h1>Forgot your password?</h1>
+<p class="sub">Enter your email and we will send you a link to choose a new one.</p>
+<form method="post" action="/forgot">
+  <label class="f" for="email">Email</label>
+  <input id="email" type="email" name="email" autocomplete="username" maxlength="254" autofocus required>
+  <button>Send reset link</button>
+</form>
+<p class="alt"><a href="/login">Back to sign in</a></p>
+{% endblock %}

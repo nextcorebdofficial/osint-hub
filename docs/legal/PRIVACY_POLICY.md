@@ -13,7 +13,7 @@ OSINT Hub is open-source software. This policy explains what happens to data on 
 
 - We do **not** use analytics, advertising, tracking pixels or third-party scripts.
 - We do **not** sell or share your data for marketing.
-- The only cookie is a login cookie, if the operator turned login on.
+- The only cookie is a login (session) cookie. It is set when you sign in and keeps you signed in for up to 7 days.
 - What you type as a target is sent to the public services listed below so they can answer. It is **not saved** unless you save it into a case.
 - We keep a small **audit log** that does not contain the targets or your IP address.
 - Saved cases can be deleted by you at any time, and may be deleted automatically after a set number of days.
@@ -109,3 +109,12 @@ The operator may update this policy. The date at the top shows the latest versio
 ## 10. Contact
 
 [OPERATOR_NAME], [OPERATOR_CONTACT]
+
+
+## Your account (instances with email accounts)
+
+If this instance uses accounts, it stores your **email address**, a **salted hash of your password** (the password itself is never stored), the time you created the account, the time you accepted the terms, and whether you confirmed your email. It also stores a **count of investigations per day** for your account, used only to enforce a fair-use limit.
+
+We use your email only to send you account messages: the confirmation link and password reset links. We do not send marketing email and we do not sell or share your address. Emails are sent through a third-party email provider chosen by the operator, which therefore sees your address and the message.
+
+Your saved cases belong to your account and are not visible to other users. You can **download everything stored about you** and **delete your account** (which deletes your cases too) from the app header at any time. Accounts that break the Acceptable Use Policy may be removed.

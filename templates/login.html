@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sign in - OSINT Hub</title>
+<title>Sign in - OSINT Hub by {{ brand }}</title>
 <meta name="robots" content="noindex">
 <style nonce="{{ nonce }}">
   :root{--bg:#f6f7f9;--card:#fff;--text:#1b1f24;--muted:#5d6672;--line:#dde1e6;--accent:#1f6feb;--bad:#cf222e;--warn:#9a6700}
@@ -26,6 +26,7 @@
 </head>
 <body>
 <form method="post" action="/login">
+  <p class="sub" style="margin:0 0 8px;font-size:12px;letter-spacing:.04em;text-transform:uppercase">{{ brand }} &middot; OSINT Hub</p>
   <h1>{% if mode == "accounts" %}Sign in{% else %}OSINT Hub{% endif %}</h1>
   <p class="sub">{% if mode == "accounts" %}Use your email and password to open the tools.{% else %}Enter the password for this instance.{% endif %}</p>
   {% if unavailable %}<p class="warn">Accounts are not available on this instance yet. The operator still has to finish setting it up.</p>{% endif %}
@@ -46,6 +47,7 @@
   {% endif %}
   <button{% if unavailable %} disabled{% endif %}>Sign in</button>
   {% if mode == "accounts" %}
+    <p class="alt"><a href="/forgot">Forgot your password?</a></p>
     {% if registration != "closed" %}<p class="alt">New here? <a href="/register">Create an account</a></p>{% endif %}
     <p class="alt"><a href="/">&larr; Back to the home page</a></p>
   {% endif %}

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Create account - OSINT Hub</title>
+<title>Create account - OSINT Hub by {{ brand }}</title>
 <meta name="robots" content="noindex">
 <style nonce="{{ nonce }}">
   :root{--bg:#f6f7f9;--card:#fff;--text:#1b1f24;--muted:#5d6672;--line:#dde1e6;--accent:#1f6feb;--bad:#cf222e;--warn:#9a6700}
@@ -28,6 +28,7 @@
 </head>
 <body>
 <form method="post" action="/register">
+  <p class="sub" style="margin:0 0 8px;font-size:12px;letter-spacing:.04em;text-transform:uppercase">{{ brand }} &middot; OSINT Hub</p>
   <h1>Create your account</h1>
   <p class="sub">An account keeps your saved cases private to you.</p>
   {% if unavailable %}<p class="warn">Accounts are not available on this instance yet. The operator still has to finish setting it up.</p>{% endif %}

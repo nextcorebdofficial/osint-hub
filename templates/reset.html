@@ -1,0 +1,15 @@
+{% extends "auth_base.html" %}
+{% block title %}Choose a new password{% endblock %}
+{% block body %}
+<h1>Choose a new password</h1>
+<p class="sub">At least 12 characters. A few random words work well.</p>
+{% if error %}<p class="err" role="alert">{{ error }}</p>{% endif %}
+<form method="post" action="/reset">
+  <input type="hidden" name="token" value="{{ token }}">
+  <label class="f" for="pw">New password</label>
+  <input id="pw" type="password" name="password" autocomplete="new-password" minlength="12" maxlength="128" autofocus required>
+  <label class="f" for="pw2">Repeat password</label>
+  <input id="pw2" type="password" name="password2" autocomplete="new-password" minlength="12" maxlength="128" required>
+  <button>Change password</button>
+</form>
+{% endblock %}

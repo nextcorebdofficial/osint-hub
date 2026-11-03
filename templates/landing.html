@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OSINT Hub - open-source investigation toolkit</title>
+<title>OSINT Hub by {{ brand }} - open-source investigation toolkit</title>
 <meta name="description" content="{{ total }} open-source intelligence tools in one place, with built-in lookups for domains, IPs, emails, usernames, phone numbers and more. Free and open source.">
 <style nonce="{{ nonce }}">
   :root{--bg:#f6f7f9;--card:#fff;--text:#1b1f24;--muted:#5d6672;--line:#dde1e6;--accent:#1f6feb;--ok:#1a7f37;--warn:#9a6700;--bad:#cf222e}
@@ -48,7 +48,7 @@
 <body>
 <div class="wrap">
   <header class="top">
-    <a class="logo" href="/">OSINT Hub</a>
+    <a class="logo" href="/">{{ brand }} <span style="font-weight:400;color:var(--muted)">OSINT Hub</span></a>
     <div class="nav">
       <select id="lang" aria-label="Language"><option value="en">English</option><option value="bn">বাংলা</option></select>
       <a href="{{ repo }}" rel="noopener" data-t="source">Source code</a>
@@ -123,7 +123,7 @@
     <div>
       <a href="/legal/terms">Terms</a><a href="/legal/privacy">Privacy</a><a href="/legal/acceptable-use">Acceptable use</a><a href="/legal/disclaimer">Disclaimer</a><a href="{{ repo }}" rel="noopener">GitHub</a>
     </div>
-    <p>{% if operator %}Operated by {{ operator }}. {% endif %}OSINT Hub is open-source software. The catalog is based on the OSINT Framework. No warranty; you are responsible for how you use it.</p>
+    <p>{% if operator %}Operated by {{ operator }}. {% endif %}&copy; 2026 {{ brand }}. OSINT Hub is open-source software (MIT). The catalog is based on the OSINT Framework. No warranty; you are responsible for how you use it.</p>
   </footer>
 </div>
 

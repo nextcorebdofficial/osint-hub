@@ -14,6 +14,12 @@ cp .env.example .env
 |---|---|---|
 | `APP_PASSWORD` | empty (no login) | Turns on the login page. Strongly recommended for anything other than your own laptop. |
 | `APP_SECRET` | random per start | Signs the login cookie. Set a fixed long random value, otherwise everyone is logged out on every restart. Generate one with `python -c "import secrets; print(secrets.token_hex(32))"`. |
+| `AUTH_MODE` | empty | `accounts` turns on the public home page, email + password sign-up and per-user cases. Without it the app uses `APP_PASSWORD` or no login. |
+| `REGISTRATION` | `open` | `open`, `invite` (only `ALLOWED_EMAILS` and `ALLOWED_EMAIL_DOMAINS`, comma separated) or `closed`. |
+| `DAILY_INVESTIGATIONS` | 100 | Investigations per account per day. `0` removes the cap. |
+| `PUBLIC_URL` | empty | The site's public address, for example `https://osint.example.org`. Required on Vercel: email links are built from it, never from the Host header. |
+| `MAIL_PROVIDER`, `MAIL_FROM`, `MAIL_API_KEY` | empty | Email for confirmation and reset links. Provider is `resend`, `brevo` or `smtp` (then use `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`). Accounts need this unless `ALLOW_UNVERIFIED=1` (self-hosting only, skips email confirmation). |
+| `BRAND_NAME` | `NextCore BD` | Name in the header, home page, emails and legal pages. |
 | `OPERATOR_NAME`, `OPERATOR_CONTACT`, `OPERATOR_JURISDICTION` | empty | Who runs this instance. Filled into the `/legal/*` pages. Until all three are set, those pages show a warning. Required if other people use your instance. |
 | `CASE_RETENTION_DAYS` | 0 (keep forever) | Delete saved cases and items older than this many days, at every start. 30 is a good value for shared instances. |
 | `AUDIT_LOG` | `audit.log` next to `main.py` | One JSON line per investigation: time, target type, purpose and a keyed hash of the target. Never the target or IP. Set to empty to turn it off. |

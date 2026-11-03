@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{ title }} - OSINT Hub</title>
+<title>{{ title }} - OSINT Hub by {{ brand }}</title>
 <style nonce="{{ nonce }}">
   :root{--bg:#f6f7f9;--card:#fff;--text:#1b1f24;--muted:#5d6672;--line:#dde1e6;--accent:#1f6feb;--warn:#9a6700}
   @media (prefers-color-scheme:dark){:root{--bg:#0e1116;--card:#161b22;--text:#e6edf3;--muted:#8b949e;--line:#2b323b;--accent:#4493f8;--warn:#d29922}}
@@ -18,7 +18,7 @@
 </head>
 <body>
 <main>
-  <nav><a href="/">&larr; OSINT Hub</a><a href="/legal/terms">Terms</a><a href="/legal/privacy">Privacy</a><a href="/legal/acceptable-use">Acceptable use</a><a href="/legal/disclaimer">Disclaimer</a></nav>
+  <nav><a href="/">&larr; {{ brand }} OSINT Hub</a><a href="/legal/terms">Terms</a><a href="/legal/privacy">Privacy</a><a href="/legal/acceptable-use">Acceptable use</a><a href="/legal/disclaimer">Disclaimer</a></nav>
   {% if not configured %}<p class="warn">The operator of this instance has not filled in their name, contact and jurisdiction (OPERATOR_NAME, OPERATOR_CONTACT, OPERATOR_JURISDICTION). Placeholders in square brackets are still visible below.</p>{% endif %}
   {{ body|safe }}
 </main>

@@ -4,6 +4,13 @@ All notable changes are listed here. Format based on [Keep a Changelog](https://
 
 ## [Unreleased]
 
+### Added (accounts and branding)
+- Email + password accounts (`AUTH_MODE=accounts`) with email confirmation and password reset by free providers (Resend, Brevo or SMTP)
+- Public home page (English and Bengali), sign-in and sign-up pages; the tools sit behind sign-in
+- Per-account private cases, data export and account deletion, daily investigation cap, invite-only or closed registration
+- Security hardening: nonce-based CSP, HSTS, same-origin check on writes, request size limits, sign-in lockout, no Host-header links in emails, `security.txt`, `robots.txt`
+- NextCore BD branding (`BRAND_NAME`)
+
 ### Added
 - Required purpose for every investigation, with an audit log that stores a keyed hash of the target, never the target or IP (`AUDIT_LOG`)
 - Optional retention: `CASE_RETENTION_DAYS` deletes old cases at start

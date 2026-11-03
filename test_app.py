@@ -951,3 +951,31 @@ def test_signup_asks_for_18_plus_and_policies_state_what_we_do_not_do(accounts):
     assert "no analytics" in privacy and "only cookie" in privacy and "do not sell" in privacy
     terms = c.get("/legal/terms").text
     assert "Organisations and infrastructure only" in terms and "/report" in terms
+
+
+# ---------------------------------------------------------------- generated GitHub catalog
+
+def test_github_catalog_is_loaded_and_free_of_person_targeting_tools():
+    import update_github_tools as u
+    path = os.path.join(os.path.dirname(main.__file__), "github_tools.json")
+    data = json.load(open(path, encoding="utf-8"))
+    assert len(data) > 1000 and all(e["category"].startswith("GitHub: ") for e in data)
+    assert not [e["name"] for e in data if u.PERSON_OR_RISKY.search(e["name"] + " " + e["description"])]
+    assert not [e["name"] for e in data if u.DENY.search(e["name"] + " " + e["description"])]
+    banned = {"Network & Port Scanning", "Vulnerability & Web Scanners", "Penetration Testing", "Bug Bounty"}
+    assert not {e["category"].replace("GitHub: ", "") for e in data} & banned
+    cats = {c["name"] for c in client.get("/api/categories").json()}
+    assert "GitHub: Digital Forensics & DFIR" in cats
+    urls = [t["url"].rstrip("/").lower() for t in main.TOOLS[main.BASE_TOOLS:]]
+    assert len(urls) == len(set(urls))  # the generated list never repeats an address
+    assert "github_tools.json" in json.load(open(os.path.join(os.path.dirname(path), "vercel.json")))["builds"][0]["config"]["includeFiles"]
+
+
+def test_filter_blocks_person_profiling_and_intrusion_tools():
+    import update_github_tools as u
+    for name, desc in (("a/osintgram", "OSINT tool on Instagram"), ("a/finder", "find a person by username"),
+                       ("a/x", "WAF bypass toolkit for security testing"), ("a/y", "dark web OSINT search"),
+                       ("a/z", "inversion of control container for security apps")):
+        assert not u.acceptable(name, desc), name
+    assert u.acceptable("a/forensics", "Incident response and forensic artifact collector")
+    assert not u.acceptable("a/lib", "A tiny library for formatting dates")  # not security related at all

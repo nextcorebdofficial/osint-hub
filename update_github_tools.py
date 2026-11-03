@@ -80,6 +80,32 @@ DENY = re.compile(
     r"whatsapp|gmail|account)s?|nsfw|porn\w*|onlyfans|deanonymi[sz]\w*)\b", re.I)
 
 
+# Tools that mainly profile or follow individuals, or that exist to evade, spy or break in, are not listed.
+# This follows the hub's own rule: organisations and infrastructure, not people (docs/SAFE_LAUNCH.md).
+PERSON_OR_RISKY = re.compile(
+    r"\b(instagram|insta|facebook|tiktok|snapchat|whatsapp|telegram|twitter|tweets?|x/twitter|linkedin|discord|"
+    r"reddit|youtube|usernames?|profiles?|dating|tinder|social[- ]media|social[- ]accounts?|sherlock|maigret|"
+    r"holehe|osintgram|ghunt|gmail|e-?mails?[- ]?(osint|recon|finder|lookup|tracker)|find(ing)? (a )?(person|people)|"
+    r"people|someone|persons?|individuals?|dark[- ]?web|darknet|onion[- ]?(sites?|links?)|"
+    r"bypass\w*|hack\w*|spy\w*|sniff\w*|payload\w*|breach\w*|jailbreak\w*|evad\w*|implants?|offensive|"
+    r"botnets?|cracking|crack|anti[- ]?forensics?|wipers?|obfuscat\w*)\b", re.I)
+NOISE = re.compile(r"(dependency injection|inversion of control|ioc container|di container|hash ?ids?|"
+                   r"password manager|login system)", re.I)
+RELEVANT = re.compile(
+    r"(osint|intelligence|security|secure|privacy|anonym|forensic|recon|threat|malware|reverse|network|dns|domain|"
+    r"archive|geoloc|geospatial|satellite|image|exif|metadata|fact|disinfo|misinformation|propaganda|graph|"
+    r"investigat|secret|credential|cloud|container|kubernetes|tls|ssl|certificate|tor\b|ctf|awesome|curated|"
+    r"detect|intrusion|siem|incident|vulnerab|attack|packet|traffic|honeypot|yara|sigma|monitor|scan|enumerat|"
+    r"whois|bgp|ip address|crawler|collection|verification|entity|link analysis|case management|opsec)", re.I)
+
+
+def acceptable(name: str, desc: str, topics: str = "") -> bool:
+    text = " ".join([name, desc, topics])
+    if DENY.search(text) or PERSON_OR_RISKY.search(text) or NOISE.search(text):
+        return False
+    return bool(RELEVANT.search(" ".join([name, desc])))
+
+
 def token() -> str:
     t = os.environ.get("GITHUB_TOKEN", "").strip()
     if t:
@@ -115,8 +141,17 @@ def keep(repo: dict) -> bool:
         return False
     if not repo.get("license") or repo.get("stargazers_count", 0) < MIN_STARS:
         return False
-    text = " ".join([repo.get("full_name", ""), repo.get("description") or "", " ".join(repo.get("topics", []))])
-    return not DENY.search(text)
+    return acceptable(repo.get("full_name", ""), repo.get("description") or "", " ".join(repo.get("topics", [])))
+
+
+def refilter() -> int:
+    """Re-apply the filters to the existing github_tools.json without calling GitHub."""
+    data = json.loads(OUT.read_text(encoding="utf-8"))
+    kept = [e for e in data if e["category"] in CATEGORIES
+            and acceptable(e["name"], re.sub(r"\s*\(★[^)]*\).*$", "", e.get("description", "")))]
+    OUT.write_text(json.dumps(kept, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(f"kept {len(kept)} of {len(data)} entries")
+    return 0
 
 
 def main() -> int:
@@ -163,4 +198,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(refilter() if "--refilter" in sys.argv else main())

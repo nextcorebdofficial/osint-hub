@@ -13,6 +13,7 @@ All notable changes are listed here. Format based on [Keep a Changelog](https://
 - Catalog additions in `extra_tools.json`: directories (IntelTechniques, OSINT.link, Awesome OSINT, Bellingcat toolkit, Start.me) and automated engines (SpiderFoot, Recon-ng, Maltego, WhatsMyName, Maigret), plus SecurityTrails
 - New catalog category "Recon & Attack Surface": ProjectDiscovery suite, Amass, Masscan, Nmap, RustScan, theHarvester, Sublist3r, BBOT. Active scanners carry an authorisation warning; the hub itself only does passive lookups
 - Safe mode (default with accounts): no lookups about individuals; `/report` abuse page; `admin.py` to block, delete and read reports; 18+ confirmation at sign-up; 30-day default retention; `docs/SAFE_LAUNCH.md`
+- `github_tools.json`: about 2,100 popular licensed open-source OSINT, forensics, threat-intelligence, privacy and defence projects from GitHub topics, shown as "GitHub: ..." categories. Scanner, penetration-testing and person-profiling tools are filtered out. Refresh with `python update_github_tools.py`
 - Optional SecurityTrails lookup (`SECURITYTRAILS_API_KEY`): subdomains and A-record history for domains
 
 ### Fixed

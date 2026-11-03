@@ -4,10 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OSINT Hub by {{ brand }} - open-source investigation toolkit</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#7c3aed">
 <meta name="description" content="{{ total }} open-source intelligence tools in one place, with built-in lookups for domains, IPs, emails, usernames, phone numbers and more. Free and open source.">
 <style nonce="{{ nonce }}">
-  :root{--bg:#f6f7f9;--card:#fff;--text:#1b1f24;--muted:#5d6672;--line:#dde1e6;--accent:#1f6feb;--ok:#1a7f37;--warn:#9a6700;--bad:#cf222e}
-  @media (prefers-color-scheme:dark){:root{--bg:#0e1116;--card:#161b22;--text:#e6edf3;--muted:#8b949e;--line:#2b323b;--accent:#4493f8;--ok:#3fb950;--warn:#d29922;--bad:#f85149}}
+  :root{--bg:#f6f7f9;--card:#fff;--text:#1b1f24;--muted:#5d6672;--line:#dde1e6;--accent:#7c3aed;--ok:#1a7f37;--warn:#9a6700;--bad:#cf222e}
+  @media (prefers-color-scheme:dark){:root{--bg:#0e1116;--card:#161b22;--text:#e6edf3;--muted:#8b949e;--line:#2b323b;--accent:#a78bfa;--ok:#3fb950;--warn:#d29922;--bad:#f85149}}
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 system-ui,-apple-system,Segoe UI,sans-serif}
   a{color:var(--accent)}
@@ -15,7 +17,7 @@
   header.top{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 0;flex-wrap:wrap}
   .logo{font-weight:700;font-size:18px;color:var(--text);text-decoration:none}
   .nav{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-  .btn{display:inline-block;padding:9px 16px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:#fff;text-decoration:none;font-size:15px;cursor:pointer;font-family:inherit}
+  .btn{display:inline-block;padding:9px 16px;border-radius:8px;border:1px solid var(--btn);background:var(--btn);color:#fff;text-decoration:none;font-size:15px;cursor:pointer;font-family:inherit}
   .btn.ghost{background:transparent;color:var(--accent)}
   .hero{padding:48px 0 32px;text-align:center}
   .hero h1{font-size:clamp(28px,5vw,46px);line-height:1.15;margin:0 0 14px}
@@ -33,7 +35,7 @@
   .card p{margin:0;color:var(--muted);font-size:15px}
   ol.steps{counter-reset:s;list-style:none;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
   ol.steps li{counter-increment:s;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px}
-  ol.steps li::before{content:counter(s);display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;font-weight:700;margin-bottom:8px}
+  ol.steps li::before{content:counter(s);display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--btn);color:#fff;font-weight:700;margin-bottom:8px}
   .rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
   .rules .card.no{border-color:var(--bad)}
   .rules .card.yes{border-color:var(--ok)}
@@ -43,12 +45,17 @@
   footer{border-top:1px solid var(--line);margin-top:40px;padding:24px 0 40px;color:var(--muted);font-size:14px}
   footer a{margin-right:14px}
   #lang{font:inherit;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--text)}
+  :root{--btn:#7c3aed}
+  button:not(.ghost):not(:disabled):hover,.btn:not(.ghost):hover{background:#6d28d9;border-color:#6d28d9}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  input[type=checkbox]{accent-color:#7c3aed}
+  svg.mark{flex:none;display:inline-block;vertical-align:middle}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header class="top">
-    <a class="logo" href="/">{{ brand }} <span style="font-weight:400;color:var(--muted)">OSINT Hub</span></a>
+    <a class="logo" href="/" style="display:flex;align-items:center;gap:10px">{{ logo(34) }}<span>{{ brand }} <span style="font-weight:400;color:var(--muted)">OSINT Hub</span></span></a>
     <div class="nav">
       <select id="lang" aria-label="Language"><option value="en">English</option><option value="bn">বাংলা</option></select>
       <a href="{{ repo }}" rel="noopener" data-t="source">Source code</a>

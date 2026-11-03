@@ -9,7 +9,7 @@ All notable changes are listed here. Format based on [Keep a Changelog](https://
 - Public home page (English and Bengali), sign-in and sign-up pages; the tools sit behind sign-in
 - Per-account private cases, data export and account deletion, daily investigation cap, invite-only or closed registration
 - Security hardening: nonce-based CSP, HSTS, same-origin check on writes, request size limits, sign-in lockout, no Host-header links in emails, `security.txt`, `robots.txt`
-- NextCore BD branding (`BRAND_NAME`)
+- NextCore BD branding (`BRAND_NAME`): purple palette, new logo (a magnifier holding a link graph), favicon, `/logo.svg`
 - Catalog additions in `extra_tools.json`: directories (IntelTechniques, OSINT.link, Awesome OSINT, Bellingcat toolkit, Start.me) and automated engines (SpiderFoot, Recon-ng, Maltego, WhatsMyName, Maigret), plus SecurityTrails
 - Optional SecurityTrails lookup (`SECURITYTRAILS_API_KEY`): subdomains and A-record history for domains
 

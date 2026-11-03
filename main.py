@@ -21,6 +21,7 @@ import markdown
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
+from markupsafe import Markup
 
 BASE = Path(__file__).parent
 
@@ -72,6 +73,7 @@ def serverless() -> bool:
 
 
 import auth  # noqa: E402  (needs env loaded first)
+import brand  # noqa: E402
 import db  # noqa: E402
 import extras  # noqa: E402
 import mailer  # noqa: E402
@@ -87,6 +89,7 @@ def operator_name() -> str:
     return os.environ.get("OPERATOR_NAME", "").strip() or BRAND
 
 
+templates.env.globals["logo"] = lambda size=28: Markup(brand.mark(size))
 REPO_URL = os.environ.get("REPO_URL", "https://github.com/nextcorebdofficial/osint-hub")
 
 
@@ -361,7 +364,8 @@ async def guard(request: Request, call_next):
     return resp
 
 
-OPEN_PATHS = {"/login", "/api/health", "/robots.txt", "/.well-known/security.txt"}
+OPEN_PATHS = {"/login", "/api/health", "/robots.txt", "/.well-known/security.txt", "/favicon.svg", "/favicon.ico",
+              "/logo.svg"}
 ACCOUNT_PUBLIC = {"/", "/register", "/verify", "/resend", "/forgot", "/reset"}
 AUTH_POSTS = ("/login", "/register", "/resend", "/forgot", "/reset")
 
@@ -752,6 +756,24 @@ async def account_delete(request: Request, payload: dict):
     resp = JSONResponse({"ok": True})
     resp.delete_cookie("osint_session")
     return resp
+
+
+_ASSET_CACHE = {"Cache-Control": "public, max-age=86400"}
+
+
+@app.get("/favicon.svg")
+async def favicon():
+    return Response(brand.favicon_svg(), media_type="image/svg+xml", headers=_ASSET_CACHE)
+
+
+@app.get("/favicon.ico")
+async def favicon_ico():
+    return RedirectResponse("/favicon.svg", status_code=308)
+
+
+@app.get("/logo.svg")
+async def logo_file():
+    return Response(brand.logo_svg(BRAND), media_type="image/svg+xml", headers=_ASSET_CACHE)
 
 
 @app.get("/robots.txt", response_class=PlainTextResponse)

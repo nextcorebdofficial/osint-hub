@@ -781,3 +781,27 @@ def test_securitytrails_lookup(monkeypatch):
     monkeypatch.setattr(lookups, "_get_json", down)
     assert "request failed" in asyncio.run(lookups.securitytrails(None, "a.com"))["error"]
     assert lookups.configured_keys()["SECURITYTRAILS_API_KEY"] is True
+
+
+# ---------------------------------------------------------------- brand
+
+def test_logo_and_favicon_are_served_publicly(accounts):
+    c = accounts()
+    for path in ("/favicon.svg", "/logo.svg"):
+        r = c.get(path)
+        assert r.status_code == 200 and r.headers["content-type"].startswith("image/svg+xml")
+        assert "<svg" in r.text and "#5b21b6" in r.text
+        assert "max-age" in r.headers["cache-control"]
+    assert "NextCore BD" in c.get("/logo.svg").text
+    assert c.get("/favicon.ico", follow_redirects=False).headers["location"] == "/favicon.svg"
+
+
+def test_pages_use_the_purple_brand_and_show_the_logo(accounts):
+    c = accounts()
+    for path in ("/", "/login", "/register", "/forgot", "/legal/terms"):
+        html = c.get(path).text
+        assert "#7c3aed" in html and 'class="mark"' in html and 'rel="icon"' in html
+        assert "#1f6feb" not in html and "#4493f8" not in html  # the old blue is gone
+    _signup(c)
+    app = c.get("/app").text
+    assert "--btn:#7c3aed" in app and "#1f6feb" not in app and 'class="mark"' in app

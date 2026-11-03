@@ -1,28 +1,212 @@
 [
-  {"name": "OSINT Framework", "url": "https://osintframework.com/", "category": "Directories & Catalogs",
-   "description": "The classic tree of free OSINT tools by category. This hub's catalog started from it.", "pricing": "free"},
-  {"name": "IntelTechniques Tools", "url": "https://inteltechniques.com/tools/", "category": "Directories & Catalogs",
-   "description": "Michael Bazzell's custom search tools and workflows for people, usernames, domains, vehicles and more.", "pricing": "free"},
-  {"name": "OSINT.link", "url": "https://osint.link/", "category": "Directories & Catalogs",
-   "description": "A large categorised bookmark directory of OSINT sites and resources.", "pricing": "free"},
-  {"name": "Awesome OSINT", "url": "https://github.com/jivoi/awesome-osint", "category": "Directories & Catalogs",
-   "description": "The biggest curated GitHub list of OSINT tools, bookmarks, APIs and tutorials, sorted by category.", "pricing": "free"},
-  {"name": "Bellingcat Online Investigations Toolkit", "url": "https://bellingcat.gitbook.io/toolkit", "category": "Directories & Catalogs",
-   "description": "Bellingcat's own directory of tools for investigative journalism, geolocation and image or map analysis.", "pricing": "free"},
-  {"name": "Start.me", "url": "https://start.me/", "category": "Directories & Catalogs",
-   "description": "Public dashboards where researchers share thousands of OSINT links. Search for OSINT boards.", "pricing": "free"},
-
-  {"name": "SpiderFoot", "url": "https://github.com/smicallef/spiderfoot", "category": "Automated Engines & Suites",
-   "description": "Automated OSINT engine: give it an IP, domain or email and it queries 100+ sources and graphs the result. Self-hosted.", "pricing": "free", "local": true},
-  {"name": "Recon-ng", "url": "https://github.com/lanmaster53/recon-ng", "category": "Automated Engines & Suites",
-   "description": "Python web reconnaissance framework with modules and API keys, driven from the command line.", "pricing": "free", "local": true},
-  {"name": "Maltego", "url": "https://www.maltego.com/", "category": "Automated Engines & Suites",
-   "description": "Visual link analysis: pivot between entities and see the relationship graph. Free community edition with limits.", "pricing": "freemium"},
-  {"name": "WhatsMyName", "url": "https://github.com/WebBreacher/WhatsMyName", "category": "Automated Engines & Suites",
-   "description": "Username enumeration data and scripts across hundreds of sites. This hub's username scan uses its list.", "pricing": "free", "local": true},
-  {"name": "Maigret", "url": "https://github.com/soxoj/maigret", "category": "Automated Engines & Suites",
-   "description": "Builds a profile dossier from a username by checking thousands of sites. Self-hosted.", "pricing": "free", "local": true},
-
-  {"name": "SecurityTrails", "url": "https://securitytrails.com/", "category": "Domain Name",
-   "description": "Historical DNS records and subdomain mapping. This hub can query its API when SECURITYTRAILS_API_KEY is set.", "pricing": "freemium", "api": true, "registration": true}
+  {
+    "name": "OSINT Framework",
+    "url": "https://osintframework.com/",
+    "category": "Directories & Catalogs",
+    "description": "The classic tree of free OSINT tools by category. This hub's catalog started from it.",
+    "pricing": "free"
+  },
+  {
+    "name": "IntelTechniques Tools",
+    "url": "https://inteltechniques.com/tools/",
+    "category": "Directories & Catalogs",
+    "description": "Michael Bazzell's custom search tools and workflows for people, usernames, domains, vehicles and more.",
+    "pricing": "free"
+  },
+  {
+    "name": "OSINT.link",
+    "url": "https://osint.link/",
+    "category": "Directories & Catalogs",
+    "description": "A large categorised bookmark directory of OSINT sites and resources.",
+    "pricing": "free"
+  },
+  {
+    "name": "Awesome OSINT",
+    "url": "https://github.com/jivoi/awesome-osint",
+    "category": "Directories & Catalogs",
+    "description": "The biggest curated GitHub list of OSINT tools, bookmarks, APIs and tutorials, sorted by category.",
+    "pricing": "free"
+  },
+  {
+    "name": "Bellingcat Online Investigations Toolkit",
+    "url": "https://bellingcat.gitbook.io/toolkit",
+    "category": "Directories & Catalogs",
+    "description": "Bellingcat's own directory of tools for investigative journalism, geolocation and image or map analysis.",
+    "pricing": "free"
+  },
+  {
+    "name": "Start.me",
+    "url": "https://start.me/",
+    "category": "Directories & Catalogs",
+    "description": "Public dashboards where researchers share thousands of OSINT links. Search for OSINT boards.",
+    "pricing": "free"
+  },
+  {
+    "name": "SpiderFoot",
+    "url": "https://github.com/smicallef/spiderfoot",
+    "category": "Automated Engines & Suites",
+    "description": "Automated OSINT engine: give it an IP, domain or email and it queries 100+ sources and graphs the result. Self-hosted.",
+    "pricing": "free",
+    "local": true
+  },
+  {
+    "name": "Recon-ng",
+    "url": "https://github.com/lanmaster53/recon-ng",
+    "category": "Automated Engines & Suites",
+    "description": "Python web reconnaissance framework with modules and API keys, driven from the command line.",
+    "pricing": "free",
+    "local": true
+  },
+  {
+    "name": "Maltego",
+    "url": "https://www.maltego.com/",
+    "category": "Automated Engines & Suites",
+    "description": "Visual link analysis: pivot between entities and see the relationship graph. Free community edition with limits.",
+    "pricing": "freemium"
+  },
+  {
+    "name": "WhatsMyName",
+    "url": "https://github.com/WebBreacher/WhatsMyName",
+    "category": "Automated Engines & Suites",
+    "description": "Username enumeration data and scripts across hundreds of sites. This hub's username scan uses its list.",
+    "pricing": "free",
+    "local": true
+  },
+  {
+    "name": "Maigret",
+    "url": "https://github.com/soxoj/maigret",
+    "category": "Automated Engines & Suites",
+    "description": "Builds a profile dossier from a username by checking thousands of sites. Self-hosted.",
+    "pricing": "free",
+    "local": true
+  },
+  {
+    "name": "SecurityTrails",
+    "url": "https://securitytrails.com/",
+    "category": "Domain Name",
+    "description": "Historical DNS records and subdomain mapping. This hub can query its API when SECURITYTRAILS_API_KEY is set.",
+    "pricing": "freemium",
+    "api": true,
+    "registration": true
+  },
+  {
+    "name": "subfinder (ProjectDiscovery)",
+    "url": "https://github.com/projectdiscovery/subfinder",
+    "category": "Recon & Attack Surface",
+    "pricing": "free",
+    "local": true,
+    "description": "Fast passive subdomain discovery from dozens of public sources. Written in Go."
+  },
+  {
+    "name": "httpx (ProjectDiscovery)",
+    "url": "https://github.com/projectdiscovery/httpx",
+    "category": "Recon & Attack Surface",
+    "pricing": "free",
+    "local": true,
+    "description": "Probes a list of hosts for live web services and reports status, title, technology and more. Active scanner: use it only on systems you own or have written permission to test."
+  },
+  {
+    "name": "naabu (ProjectDiscovery)",
+    "url": "https://github.com/projectdiscovery/naabu",
+    "category": "Recon & Attack Surface",
+    "pricing": "free",
+    "local": true,
+    "description": "Fast SYN and CONNECT port scanner written in Go. Active scanner: use it only on systems you own or have written permission to test."
+  },
+  {
+    "name": "nuclei (ProjectDiscovery)",
+    "url": "https://github.com/projectdiscovery/nuclei",
+    "category": "Recon & Attack Surface",
+    "pricing": "free",
+    "local": true,
+    "description": "Template-based vulnerability scanner with a large community template library. Active scanner: use it only on systems you own or have written permission to test."
+  },
+  {
+    "name": "dnsx (ProjectDiscovery)",
+    "url": "https://github.com/projectdiscovery/dnsx",
+    "category": "Recon & Attack Surface",
+    "pricing": "free",
+    "local": true,
+    "description": "Fast DNS toolkit: resolve, query many record types and brute-force subdomains."
+  },
+  {
+    "name": "katana (ProjectDiscovery)",
+    "url": "https://github.com/projectdiscovery/katana",
+    "category": "Recon & Attack Surface",
+    "pricing": "free",
+    "local": true,
+    "description": "Next-generation web crawler for collecting endpoints and scripts. Active scanner: use it only on systems you own or have written permission to test."
+  },
+  {
+    "name": "asnmap (ProjectDiscovery)",
+    "url": "https://github.com/projectdiscovery/asnmap",
+    "category": "Recon & Attack Surface",
+    "pricing": "free",
+    "local": true,
+    "description": "Maps organisations, domains and IPs to ASNs and CIDR ranges."
+  },
+  {
+    "name": "Chaos (ProjectDiscovery)",
+    "url": "https://chaos.projectdiscovery.io/",
+    "category": "Recon & Attack Surface",
+    "pricing": "free",
+    "local": false,
+    "description": "Dataset of subdomains for many public bug bounty programs."
+  },
+  {
+    "name": "OWASP Amass",
+    "url": "https://github.com/owasp-amass/amass",
+    "category": "Recon & Attack Surface",
+    "pricing": "free",
+    "local": true,
+    "description": "OWASP flagship for attack surface mapping: public APIs, web archives, DNS and a graph database."
+  },
+  {
+    "name": "Masscan",
+    "url": "https://github.com/robertdavidgraham/masscan",
+    "category": "Recon & Attack Surface",
+    "pricing": "free",
+    "local": true,
+    "description": "Asynchronous TCP port scanner built for very large address ranges. Active scanner: use it only on systems you own or have written permission to test."
+  },
+  {
+    "name": "Nmap",
+    "url": "https://nmap.org/",
+    "category": "Recon & Attack Surface",
+    "pricing": "free",
+    "local": true,
+    "description": "The standard network scanner: host discovery, ports, services, OS detection and scripts. Active scanner: use it only on systems you own or have written permission to test."
+  },
+  {
+    "name": "RustScan",
+    "url": "https://github.com/RustScan/RustScan",
+    "category": "Recon & Attack Surface",
+    "pricing": "free",
+    "local": true,
+    "description": "Fast port scanner that hands open ports to Nmap. Active scanner: use it only on systems you own or have written permission to test."
+  },
+  {
+    "name": "theHarvester",
+    "url": "https://github.com/laramies/theHarvester",
+    "category": "Recon & Attack Surface",
+    "pricing": "free",
+    "local": true,
+    "description": "Gathers emails, subdomains, hosts and names from public sources."
+  },
+  {
+    "name": "Sublist3r",
+    "url": "https://github.com/aboul3la/Sublist3r",
+    "category": "Recon & Attack Surface",
+    "pricing": "free",
+    "local": true,
+    "description": "Python subdomain enumeration using search engines and public sources."
+  },
+  {
+    "name": "BBOT",
+    "url": "https://github.com/blacklanternsecurity/bbot",
+    "category": "Recon & Attack Surface",
+    "pricing": "free",
+    "local": true,
+    "description": "Recursive, modular OSINT and recon scanner for attack surface discovery."
+  }
 ]

@@ -805,3 +805,15 @@ def test_pages_use_the_purple_brand_and_show_the_logo(accounts):
     _signup(c)
     app = c.get("/app").text
     assert "--btn:#7c3aed" in app and "#1f6feb" not in app and 'class="mark"' in app
+
+
+def test_recon_tools_are_listed_with_an_authorisation_warning():
+    items = client.get("/api/tools?category=Recon%20%26%20Attack%20Surface&limit=100").json()["items"]
+    names = " ".join(t["name"] for t in items)
+    for tool in ("subfinder", "httpx", "naabu", "nuclei", "Amass", "Masscan", "Nmap"):
+        assert tool in names
+    for t in items:
+        if t["name"].split()[0] in ("naabu", "nuclei", "Masscan", "Nmap", "RustScan", "httpx", "katana"):
+            assert "permission" in t["description"]  # active scanners say so
+    assert "Recon & Attack Surface" in main.TARGET_CATEGORIES["domain"]
+    assert "Recon & Attack Surface" in main.TARGET_CATEGORIES["ip"]

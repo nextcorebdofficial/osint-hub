@@ -20,6 +20,7 @@ cp .env.example .env
 | `RATE_LIMIT_HEAVY` | 20 | Max starts of investigations and EXIF uploads per IP per minute |
 | `RATE_LIMIT_GENERAL` | 300 | Max other requests per IP per minute |
 | `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | empty | Store cases in Turso (libSQL) instead of a file. Needed for persistent cases on Vercel. See [DEPLOY_VERCEL.md](DEPLOY_VERCEL.md). |
+| `CASES_ENABLED` | auto | `1` or `0`. Saved cases have no per-user separation, so by default they are **off** on Vercel when `APP_PASSWORD` is not set (everyone would see everyone's cases). Set `1` to force them on. |
 | `SERVERLESS` | empty | Set to `1` to run investigations inside one request (set automatically on Vercel). |
 | `DB_PATH` | `osint.db` next to `main.py` | SQLite file for cases |
 | `HIBP_API_KEY` | empty | Have I Been Pwned breach check for emails |

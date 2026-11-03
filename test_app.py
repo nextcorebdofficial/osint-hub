@@ -306,3 +306,17 @@ def test_audit_falls_back_to_stdout_when_disk_is_read_only(monkeypatch, capsys):
     main._audit("domain", "example.com", P)
     out = capsys.readouterr().out
     assert out.startswith("AUDIT {") and "example.com" not in out
+
+
+def test_cases_are_off_on_public_serverless_instances(monkeypatch):
+    monkeypatch.setenv("VERCEL", "1")
+    monkeypatch.delenv("APP_PASSWORD", raising=False)
+    monkeypatch.delenv("CASES_ENABLED", raising=False)
+    assert client.get("/api/config").json()["cases"] is False
+    assert client.get("/api/cases").status_code == 403
+    assert client.post("/api/cases", json={"name": "x"}).status_code == 403
+    monkeypatch.setenv("CASES_ENABLED", "1")  # explicit opt-in
+    assert client.get("/api/cases").status_code == 200
+    monkeypatch.delenv("CASES_ENABLED")
+    monkeypatch.setenv("APP_PASSWORD", "pw")  # with a login they are on again (cookie needed)
+    assert main.cases_enabled() is True

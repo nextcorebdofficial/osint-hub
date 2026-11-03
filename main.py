@@ -37,6 +37,17 @@ def _load_dotenv() -> None:
 _load_dotenv()
 
 
+def cases_enabled() -> bool:
+    """Cases have no per-user separation, so a public instance without a login must not store them.
+
+    CASES_ENABLED=1/0 decides explicitly; otherwise they are off on serverless hosts without APP_PASSWORD.
+    """
+    v = os.environ.get("CASES_ENABLED", "").strip().lower()
+    if v:
+        return v not in ("0", "false", "no", "off")
+    return not (serverless() and not os.environ.get("APP_PASSWORD"))
+
+
 def serverless() -> bool:
     """True on Vercel (or when SERVERLESS=1): no background tasks, no shared memory, read-only disk."""
     return bool(os.environ.get("VERCEL") or os.environ.get("SERVERLESS"))
@@ -276,6 +287,8 @@ async def _gate(request: Request, call_next):
             if path.startswith("/api"):
                 return JSONResponse({"detail": "login required"}, status_code=401)
             return RedirectResponse("/login", status_code=303)
+    if path.startswith(("/api/cases", "/api/items")) and not cases_enabled():
+        return JSONResponse({"detail": "saved cases are turned off on this instance"}, status_code=403)
     heavy = request.method == "POST" and path in ("/api/investigate", "/api/jobs", "/api/toolbox/exif")
     limit = int(os.environ.get("RATE_LIMIT_HEAVY", "20" if heavy else "300")) if heavy else \
         int(os.environ.get("RATE_LIMIT_GENERAL", "300"))
@@ -388,6 +401,7 @@ async def config():
     return {"keys": lookups.configured_keys(), "auth": bool(os.environ.get("APP_PASSWORD")),
             "encode_ops": list(extras.OPS), "target_types": list(TARGET_CATEGORIES),
             "purposes": PURPOSES, "serverless": serverless(), "storage": db.backend(),
+            "cases": cases_enabled(),
             "operator": os.environ.get("OPERATOR_NAME", "").strip(),
             "retention_days": int(os.environ.get("CASE_RETENTION_DAYS") or 0)}
 

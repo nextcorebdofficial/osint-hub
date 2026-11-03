@@ -12,6 +12,7 @@ All notable changes are listed here. Format based on [Keep a Changelog](https://
 - Security headers and a Content-Security-Policy on all pages
 
 ### Added (deployment)
+- `CASES_ENABLED`: cases are off by default on public serverless instances without a login
 - Vercel support: `vercel.json`, in-request investigations, Turso storage, stdout audit lines, forwarded client IP
 - Deployment guide in English and Bengali (`docs/DEPLOY_VERCEL.md`)
 

@@ -244,7 +244,7 @@ let timer;['#q','#pricing','#flag'].forEach(s=>$(s).oninput=()=>{clearTimeout(ti
 $('#more').onclick=()=>reload(true);
 
 /* ---------- investigation ---------- */
-let last=null;
+let last=null,casesOn=true;
 const IP4=/\b(?:\d{1,3}\.){3}\d{1,3}\b/g,DOM=/\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b/gi,MAIL=/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g;
 function pivots(d){
   if(d.type==='username')return [];
@@ -266,7 +266,7 @@ function graph(center,nodes){
 }
 function render(d){
   const L=d.lookup||{};let h=`<h2>${esc(d.value)} <span class="tag">${esc(d.type)}</span>${d.cached?'<span class="tag">cached</span>':''}</h2>`;
-  h+=`<div class="row"><select id="casesel"></select><button class="ghost" id="savecase">Save to case</button><span id="savemsg" class="muted"></span></div>`;
+  if(casesOn)h+=`<div class="row"><select id="casesel"></select><button class="ghost" id="savecase">Save to case</button><span id="savemsg" class="muted"></span></div>`;
   if(L.found){
     h+=`<h3>Found on ${L.found.length} of ${L.sites_checked} sites checked</h3><div class="card found">`+
       L.found.map(f=>`<a href="${esc(f.url)}" target="_blank" rel="noopener noreferrer">${esc(f.site)} <span class="muted">${esc(f.category||'')}</span></a>`).join('')+'</div>';
@@ -348,6 +348,7 @@ async function loadConfig(){
   $('#purpose').innerHTML='<option value="">Purpose (required)</option>'+Object.entries(c.purposes).map(([k,v])=>`<option value="${esc(k)}">${esc(v)}</option>`).join('');
   $('#purpose').value=store.get('purpose','');
   $('#purpose').onchange=e=>store.set('purpose',e.target.value);
+  casesOn=c.cases!==false;if(!casesOn)$('#t-cases').style.display='none';
   $('#operator').textContent=c.operator?`Operated by ${c.operator}. `:'';
   if(c.retention_days)$('#retention').textContent=`Saved cases are deleted after ${c.retention_days} days. `;
   const on=Object.entries(c.keys).filter(([,v])=>v).map(([k])=>k.replace('_API_KEY',''));

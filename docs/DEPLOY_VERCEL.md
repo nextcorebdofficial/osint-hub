@@ -12,6 +12,8 @@ The app runs on Vercel's Python runtime. Vercel is serverless, so a few things w
 | Rate limits and cache | Per instance, so they are best effort, not a hard guarantee. |
 | Client IP | Taken from `X-Forwarded-For`, which Vercel sets. |
 
+**Public instance without a password:** saved cases are switched off automatically (see `CASES_ENABLED`), because every visitor would share them. Set `APP_PASSWORD` if you want cases.
+
 Vercel Hobby is for **non-commercial** use. Client or revenue work needs Pro.
 
 ## 1. Put the code on GitHub

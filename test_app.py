@@ -320,3 +320,202 @@ def test_cases_are_off_on_public_serverless_instances(monkeypatch):
     monkeypatch.delenv("CASES_ENABLED")
     monkeypatch.setenv("APP_PASSWORD", "pw")  # with a login they are on again (cookie needed)
     assert main.cases_enabled() is True
+
+
+# ---------------------------------------------------------------- email accounts
+
+PW = "correct horse battery"
+
+
+@pytest.fixture
+def accounts(monkeypatch):
+    """Accounts mode with a clean database and a fresh browser for each test."""
+    monkeypatch.setenv("AUTH_MODE", "accounts")
+    monkeypatch.setenv("DB_PATH", os.path.join(tempfile.mkdtemp(), "acc.db"))
+    monkeypatch.delenv("APP_PASSWORD", raising=False)
+    monkeypatch.delenv("REGISTRATION", raising=False)
+    main._HITS.clear()
+    main._FAILS.clear()
+    main._USERS.clear()
+    return lambda: TestClient(main.app)
+
+
+def _signup(c, email="a@example.com", pw=PW, **over):
+    data = {"email": email, "password": pw, "password2": pw, "terms": "on", **over}
+    return c.post("/register", data=data, follow_redirects=False)
+
+
+def test_landing_is_public_and_app_is_private(accounts):
+    c = accounts()
+    home = c.get("/")
+    assert home.status_code == 200 and "Every open-source investigation tool" in home.text
+    assert c.get("/app", follow_redirects=False).status_code == 303
+    assert c.get("/api/tools").status_code == 401
+    assert c.get("/legal/terms").status_code == 200
+    assert c.get("/docs", follow_redirects=False).status_code == 303  # even the API docs need a login
+
+
+def test_register_login_logout_flow(accounts):
+    c = accounts()
+    r = _signup(c)
+    assert r.status_code == 303 and r.headers["location"] == "/app"
+    assert c.get("/app").status_code == 200
+    assert c.get("/api/config").json()["user"] == "a@example.com"
+    c.post("/logout")
+    assert c.get("/api/tools").status_code == 401
+    assert c.post("/login", data={"email": "a@example.com", "password": "wrong password!"}).status_code == 401
+    ok = c.post("/login", data={"email": "A@Example.com", "password": PW}, follow_redirects=False)
+    assert ok.status_code == 303 and c.get("/api/tools").status_code == 200
+
+
+@pytest.mark.parametrize("over,code", [
+    ({"password": "short", "password2": "short"}, 400),
+    ({"password": "password1234", "password2": "password1234"}, 400),
+    ({"password2": "different password"}, 400),
+    ({"terms": ""}, 400),
+    ({"email": "not-an-email"}, 400),
+])
+def test_register_rejects_bad_input(accounts, over, code):
+    assert _signup(accounts(), **over).status_code == code
+
+
+def test_duplicate_email_is_refused(accounts):
+    _signup(accounts())
+    assert _signup(accounts()).status_code == 409
+
+
+def test_passwords_are_hashed_not_stored(accounts):
+    _signup(accounts())
+    stored = db.get_user_by_email("a@example.com")["pw"]
+    assert stored.startswith("scrypt$") and PW not in stored
+
+
+def test_login_locks_after_repeated_failures(accounts):
+    c = accounts()
+    _signup(c)
+    c.post("/logout")
+    codes = [c.post("/login", data={"email": "a@example.com", "password": "nope nope nope"}).status_code
+             for _ in range(6)]
+    assert codes[:5] == [401] * 5 and codes[5] == 429
+    assert c.post("/login", data={"email": "a@example.com", "password": PW}).status_code == 429  # even the right one
+
+
+def test_cases_are_private_per_account(accounts):
+    alice, bob = accounts(), accounts()
+    _signup(alice, "alice@example.com")
+    _signup(bob, "bob@example.com")
+    cid = alice.post("/api/cases", json={"name": "alice only"}).json()["id"]
+    item = alice.post(f"/api/cases/{cid}/items", json={"kind": "domain", "value": "a.com", "result": {}}).json()
+    assert bob.get("/api/cases").json() == []
+    assert bob.get(f"/api/cases/{cid}").status_code == 404
+    assert bob.get(f"/api/cases/{cid}/export?format=json").status_code == 404
+    assert bob.post(f"/api/cases/{cid}/items", json={"kind": "d", "value": "v", "result": {}}).status_code == 404
+    assert bob.patch(f"/api/items/{item['id']}", json={"note": "hacked"}).status_code == 404
+    assert bob.delete(f"/api/items/{item['id']}").status_code == 404
+    assert bob.delete(f"/api/cases/{cid}").status_code == 404
+    assert alice.get(f"/api/cases/{cid}").json()["items"][0]["note"] == ""
+
+
+def test_account_export_and_delete(accounts):
+    c = accounts()
+    _signup(c)
+    cid = c.post("/api/cases", json={"name": "mine"}).json()["id"]
+    c.post(f"/api/cases/{cid}/items", json={"kind": "domain", "value": "a.com", "result": {"x": 1}})
+    data = c.get("/api/account/export").json()
+    assert data["email"] == "a@example.com" and data["cases"][0]["items"][0]["value"] == "a.com"
+    assert c.request("DELETE", "/api/account", json={"password": "wrong password!"}).status_code == 403
+    assert c.request("DELETE", "/api/account", json={"password": PW}).status_code == 200
+    assert db.get_user_by_email("a@example.com") is None
+    assert c.get("/api/tools").status_code == 401  # the old cookie no longer works
+
+
+def test_registration_can_be_closed_or_invite_only(accounts, monkeypatch):
+    monkeypatch.setenv("REGISTRATION", "closed")
+    assert _signup(accounts()).status_code == 400
+    monkeypatch.setenv("REGISTRATION", "invite")
+    monkeypatch.setenv("ALLOWED_EMAILS", "friend@example.com")
+    monkeypatch.setenv("ALLOWED_EMAIL_DOMAINS", "ngo.org")
+    assert _signup(accounts(), "stranger@example.com").status_code == 400
+    assert _signup(accounts(), "friend@example.com").status_code == 303
+    assert _signup(accounts(), "staff@ngo.org").status_code == 303
+
+
+def test_accounts_refuse_to_start_without_a_persistent_database(accounts, monkeypatch):
+    monkeypatch.setenv("VERCEL", "1")
+    monkeypatch.delenv("DB_PATH")
+    monkeypatch.setenv("APP_SECRET", "x" * 32)
+    assert main.accounts_problem().startswith("no persistent database")
+    assert _signup(accounts()).status_code == 503
+    monkeypatch.setenv("ALLOW_TEMP_ACCOUNTS", "1")
+    assert main.accounts_problem() == ""
+
+
+def test_tampered_or_foreign_sessions_are_rejected(accounts):
+    c = accounts()
+    _signup(c)
+    tok = c.cookies.get("osint_session")
+    uid, exp, sig = tok.split(".")
+    for bad in (f"{uid}.{exp}.{'0' * 64}", f"999.{exp}.{sig}", f"{uid}.1.{sig}", "garbage"):
+        evil = accounts()
+        evil.cookies.set("osint_session", bad)
+        assert evil.get("/api/tools").status_code == 401
+
+
+def test_changing_the_password_invalidates_old_sessions():
+    import auth
+    u = {"id": 7, "pw": auth.hash_password("first password 123")}
+    tok = auth.make_session("secret", u)
+    assert auth.session_valid("secret", tok, u)
+    assert not auth.session_valid("other-secret", tok, u)
+    assert not auth.session_valid("secret", tok, {"id": 7, "pw": auth.hash_password("second password 456")})
+
+
+# ---------------------------------------------------------------- hardening
+
+def test_cross_site_writes_are_blocked():
+    r = client.post("/api/toolbox/encode", json={"op": "rot13", "text": "x"}, headers={"origin": "https://evil.example"})
+    assert r.status_code == 403
+    ok = client.post("/api/toolbox/encode", json={"op": "rot13", "text": "x"}, headers={"origin": "http://testserver"})
+    assert ok.status_code == 200
+    assert client.post("/api/toolbox/encode", json={"op": "rot13", "text": "x"}, headers={"origin": "null"}).status_code == 403
+
+
+def test_csp_uses_a_fresh_nonce_and_no_unsafe_inline_scripts():
+    a, b = client.get("/"), client.get("/")
+    csp = a.headers["content-security-policy"]
+    script_src = csp.split("script-src ")[1].split(";")[0]
+    assert "'nonce-" in script_src and "unsafe-inline" not in script_src
+    nonce = csp.split("'nonce-")[1].split("'")[0]
+    assert f'nonce="{nonce}"' in a.text
+    assert csp != b.headers["content-security-policy"]
+    assert "object-src 'none'" in csp and "frame-ancestors 'none'" in csp
+
+
+def test_extra_security_headers():
+    h = client.get("/api/health").headers
+    assert h["cross-origin-opener-policy"] == "same-origin" and h["cross-origin-resource-policy"] == "same-origin"
+    assert "strict-transport-security" not in h  # plain http locally
+    assert "strict-transport-security" in TestClient(main.app, base_url="https://testserver").get("/api/health").headers
+
+
+def test_oversized_json_is_rejected():
+    r = client.post("/api/toolbox/encode", content=b"x" * 10, headers={"content-length": "5000000",
+                                                                         "content-type": "application/json"})
+    assert r.status_code == 413
+
+
+def test_bad_limit_values_are_a_400_not_a_crash():
+    for bad in ("abc", [1], {"a": 1}):
+        r = client.post("/api/investigate", json={"value": "+8801712345678", "purpose": P, "limit": bad})
+        assert r.status_code in (200, 400)  # phone ignores limit; username must reject it
+    r = client.post("/api/investigate", json={"value": "someuser", "type": "username", "purpose": P, "limit": "abc"})
+    assert r.status_code == 400
+
+
+def test_robots_and_security_txt(monkeypatch):
+    assert "Disallow: /api/" in client.get("/robots.txt").text
+    monkeypatch.delenv("OPERATOR_CONTACT", raising=False)
+    assert client.get("/.well-known/security.txt").status_code == 404
+    monkeypatch.setenv("OPERATOR_CONTACT", "security@example.org")
+    body = client.get("/.well-known/security.txt").text
+    assert "Contact: mailto:security@example.org" in body and "Expires:" in body

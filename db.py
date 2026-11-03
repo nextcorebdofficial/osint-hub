@@ -20,7 +20,15 @@ SCHEMA = [
     """CREATE TABLE IF NOT EXISTS cases (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
-    created REAL NOT NULL
+    created REAL NOT NULL,
+    user_id INTEGER
+)""",
+    """CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL UNIQUE,
+    pw TEXT NOT NULL,
+    created REAL NOT NULL,
+    terms REAL NOT NULL
 )""",
     """CREATE TABLE IF NOT EXISTS items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -98,6 +106,14 @@ def _turso_run(stmts: list[tuple[str, tuple]]) -> list[dict]:
     if url not in _turso_ready:
         _http_post(url, token, {"requests": [
             {"type": "execute", "stmt": {"sql": s}} for s in SCHEMA] + [{"type": "close"}]})
+        cols = _http_post(url, token, {"requests": [
+            {"type": "execute", "stmt": {"sql": "PRAGMA table_info(cases)"}}, {"type": "close"}]})
+        names = [row[1].get("value") for row in
+                 cols["results"][0]["response"]["result"].get("rows", [])]
+        if "user_id" not in names:  # databases created before accounts existed
+            _http_post(url, token, {"requests": [
+                {"type": "execute", "stmt": {"sql": "ALTER TABLE cases ADD COLUMN user_id INTEGER"}},
+                {"type": "close"}]})
         _turso_ready.add(url)
     body = {"requests": [
         {"type": "execute", "stmt": {"sql": sql, "args": [_arg(a) for a in args]}} for sql, args in stmts
@@ -129,6 +145,8 @@ def _run(stmts: list[tuple[str, tuple]]) -> list[dict]:
     with closing(c), c:
         for sql in SCHEMA:
             c.execute(sql)
+        if "user_id" not in [r[1] for r in c.execute("PRAGMA table_info(cases)")]:
+            c.execute("ALTER TABLE cases ADD COLUMN user_id INTEGER")  # created before accounts existed
         for sql, args in stmts:
             cur = c.execute(sql, args)
             out.append({"rows": [dict(r) for r in cur.fetchall()] if cur.description else [],
@@ -141,40 +159,48 @@ def _one(sql: str, args: tuple = ()) -> dict:
 
 
 # ---------------------------------------------------------------- public API
+#
+# `uid` scopes every case query to one account. None means "no accounts" (single-user or shared
+# password mode); `user_id IS ?` matches NULL as well as a number, so both modes use one query.
 
-def list_cases() -> list[dict]:
+def list_cases(uid: int | None = None) -> list[dict]:
     return _one(
         "SELECT c.id, c.name, c.created, COUNT(i.id) AS items FROM cases c "
-        "LEFT JOIN items i ON i.case_id = c.id GROUP BY c.id ORDER BY c.created DESC")["rows"]
+        "LEFT JOIN items i ON i.case_id = c.id WHERE c.user_id IS ? GROUP BY c.id ORDER BY c.created DESC",
+        (uid,))["rows"]
 
 
-def create_case(name: str) -> dict:
-    r = _one("INSERT INTO cases (name, created) VALUES (?, ?)", (name, time.time()))
+def create_case(name: str, uid: int | None = None) -> dict:
+    r = _one("INSERT INTO cases (name, created, user_id) VALUES (?, ?, ?)", (name, time.time(), uid))
     return {"id": r["lastrowid"], "name": name}
 
 
-def delete_case(case_id: int) -> bool:
-    r = _run([("DELETE FROM items WHERE case_id = ?", (case_id,)),
-              ("DELETE FROM cases WHERE id = ?", (case_id,))])
+def delete_case(case_id: int, uid: int | None = None) -> bool:
+    r = _run([("DELETE FROM items WHERE case_id = ? AND case_id IN "
+               "(SELECT id FROM cases WHERE id = ? AND user_id IS ?)", (case_id, case_id, uid)),
+              ("DELETE FROM cases WHERE id = ? AND user_id IS ?", (case_id, uid))])
     return r[1]["rowcount"] > 0
 
 
-def get_case(case_id: int) -> dict | None:
-    case, items = _run([("SELECT * FROM cases WHERE id = ?", (case_id,)),
-                        ("SELECT * FROM items WHERE case_id = ? ORDER BY created", (case_id,))])
+def get_case(case_id: int, uid: int | None = None) -> dict | None:
+    case, items = _run([
+        ("SELECT * FROM cases WHERE id = ? AND user_id IS ?", (case_id, uid)),
+        ("SELECT i.* FROM items i JOIN cases c ON c.id = i.case_id "
+         "WHERE i.case_id = ? AND c.user_id IS ? ORDER BY i.created", (case_id, uid))])
     if not case["rows"]:
         return None
-    out = dict(case["rows"][0])
+    out = {k: v for k, v in case["rows"][0].items() if k != "user_id"}
     out["items"] = [{**i, "result": json.loads(i["result"])} for i in items["rows"]]
     return out
 
 
-def add_item(case_id: int, kind: str, value: str, result: dict, note: str = "") -> dict | None:
+def add_item(case_id: int, kind: str, value: str, result: dict, note: str = "",
+             uid: int | None = None) -> dict | None:
     # One statement, so the existence check and the insert cannot be separated on a remote database.
     r = _one(
         "INSERT INTO items (case_id, kind, value, result, note, created) "
-        "SELECT ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM cases WHERE id = ?)",
-        (case_id, kind, value, json.dumps(result), note, time.time(), case_id))
+        "SELECT ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM cases WHERE id = ? AND user_id IS ?)",
+        (case_id, kind, value, json.dumps(result), note, time.time(), case_id, uid))
     return {"id": r["lastrowid"]} if r["rowcount"] else None
 
 
@@ -187,9 +213,51 @@ def purge_older_than(days: int) -> int:
     return r[0]["rowcount"] + r[1]["rowcount"]
 
 
-def update_note(item_id: int, note: str) -> bool:
-    return _one("UPDATE items SET note = ? WHERE id = ?", (note, item_id))["rowcount"] > 0
+def update_note(item_id: int, note: str, uid: int | None = None) -> bool:
+    return _one("UPDATE items SET note = ? WHERE id = ? AND case_id IN "
+                "(SELECT id FROM cases WHERE user_id IS ?)", (note, item_id, uid))["rowcount"] > 0
 
 
-def delete_item(item_id: int) -> bool:
-    return _one("DELETE FROM items WHERE id = ?", (item_id,))["rowcount"] > 0
+def delete_item(item_id: int, uid: int | None = None) -> bool:
+    return _one("DELETE FROM items WHERE id = ? AND case_id IN (SELECT id FROM cases WHERE user_id IS ?)",
+                (item_id, uid))["rowcount"] > 0
+
+
+# ---------------------------------------------------------------- accounts
+
+def create_user(email: str, pw_hash: str, terms_at: float) -> int | None:
+    """Returns the new id, or None when the email is already registered."""
+    try:
+        r = _one("INSERT INTO users (email, pw, created, terms) "
+                 "SELECT ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = ?)",
+                 (email, pw_hash, time.time(), terms_at, email))
+    except (sqlite3.IntegrityError, RuntimeError) as e:  # lost a race against the UNIQUE constraint
+        if "UNIQUE" in str(e).upper():
+            return None
+        raise
+    return r["lastrowid"] if r["rowcount"] else None
+
+
+def get_user_by_email(email: str) -> dict | None:
+    rows = _one("SELECT * FROM users WHERE email = ?", (email,))["rows"]
+    return rows[0] if rows else None
+
+
+def get_user(uid: int) -> dict | None:
+    rows = _one("SELECT * FROM users WHERE id = ?", (uid,))["rows"]
+    return rows[0] if rows else None
+
+
+def delete_user(uid: int) -> bool:
+    """Remove the account and everything it saved."""
+    r = _run([("DELETE FROM items WHERE case_id IN (SELECT id FROM cases WHERE user_id = ?)", (uid,)),
+              ("DELETE FROM cases WHERE user_id = ?", (uid,)),
+              ("DELETE FROM users WHERE id = ?", (uid,))])
+    return r[2]["rowcount"] > 0
+
+
+def export_user(uid: int) -> dict:
+    user = get_user(uid) or {}
+    cases = [get_case(c["id"], uid) for c in list_cases(uid)]
+    return {"email": user.get("email"), "created": user.get("created"),
+            "terms_accepted": user.get("terms"), "cases": cases}

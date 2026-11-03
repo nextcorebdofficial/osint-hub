@@ -3,30 +3,52 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OSINT Hub Login</title>
-<style>
-  :root{--bg:#f6f7f9;--card:#fff;--text:#1b1f24;--line:#dde1e6;--accent:#1f6feb;--bad:#cf222e}
-  @media (prefers-color-scheme:dark){:root{--bg:#0e1116;--card:#161b22;--text:#e6edf3;--line:#2b323b;--accent:#4493f8;--bad:#f85149}}
-  body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--text);font:15px system-ui,sans-serif}
-  form{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:24px;width:min(340px,90vw)}
-  h1{margin:0 0 14px;font-size:20px}
-  input,button{width:100%;font:inherit;padding:9px 10px;border:1px solid var(--line);border-radius:6px;margin-bottom:10px;background:var(--card);color:var(--text)}
-  button{background:var(--accent);border-color:var(--accent);color:#fff;cursor:pointer}
-  .err{color:var(--bad);margin:0 0 10px}
+<title>Sign in - OSINT Hub</title>
+<meta name="robots" content="noindex">
+<style nonce="{{ nonce }}">
+  :root{--bg:#f6f7f9;--card:#fff;--text:#1b1f24;--muted:#5d6672;--line:#dde1e6;--accent:#1f6feb;--bad:#cf222e;--warn:#9a6700}
+  @media (prefers-color-scheme:dark){:root{--bg:#0e1116;--card:#161b22;--text:#e6edf3;--muted:#8b949e;--line:#2b323b;--accent:#4493f8;--bad:#f85149;--warn:#d29922}}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--text);font:15px system-ui,sans-serif;padding:16px}
+  form{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:24px;width:min(380px,100%)}
+  h1{margin:0 0 4px;font-size:20px}
+  .sub{color:var(--muted);margin:0 0 16px;font-size:13px}
+  label.f{display:block;font-size:13px;margin-bottom:4px}
+  input,button{width:100%;font:inherit;padding:9px 10px;border:1px solid var(--line);border-radius:6px;margin-bottom:12px;background:var(--card);color:var(--text)}
+  button{background:var(--accent);border-color:var(--accent);color:#fff;cursor:pointer;margin-bottom:0}
+  .err{color:var(--bad);margin:0 0 12px}
+  .warn{border:1px solid var(--warn);color:var(--warn);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:13px}
+  .alt{margin:14px 0 0;font-size:13px;color:var(--muted);text-align:center}
+  a{color:var(--accent)}
+  .chk{display:flex;gap:8px;font-size:13px;margin-bottom:12px;align-items:flex-start}
+  .chk input{width:auto;margin:3px 0 0}
 </style>
 </head>
 <body>
 <form method="post" action="/login">
-  <h1>OSINT Hub</h1>
-  {% if error %}<p class="err">Wrong password.</p>{% endif %}
-  <input type="password" name="password" placeholder="Password" autofocus required>
-  <label style="display:flex;gap:8px;font-size:13px;margin-bottom:10px;align-items:flex-start">
-    <input type="checkbox" required style="width:auto;margin:3px 0 0">
-    <span>I will only investigate targets I am entitled to investigate, and I accept the
-      <a href="/legal/terms" target="_blank">Terms</a>, <a href="/legal/acceptable-use" target="_blank">Acceptable Use</a>
-      and <a href="/legal/privacy" target="_blank">Privacy Policy</a>.</span>
-  </label>
-  <button>Sign in</button>
+  <h1>{% if mode == "accounts" %}Sign in{% else %}OSINT Hub{% endif %}</h1>
+  <p class="sub">{% if mode == "accounts" %}Use your email and password to open the tools.{% else %}Enter the password for this instance.{% endif %}</p>
+  {% if unavailable %}<p class="warn">Accounts are not available on this instance yet. The operator still has to finish setting it up.</p>{% endif %}
+  {% if error %}<p class="err" role="alert">{{ error }}</p>{% endif %}
+  {% if mode == "accounts" %}
+    <label class="f" for="email">Email</label>
+    <input id="email" type="email" name="email" autocomplete="username" maxlength="254" autofocus required>
+    <label class="f" for="pw">Password</label>
+    <input id="pw" type="password" name="password" autocomplete="current-password" maxlength="128" required>
+  {% else %}
+    <input type="password" name="password" placeholder="Password" autocomplete="current-password" maxlength="128" autofocus required>
+    <label class="chk">
+      <input type="checkbox" required>
+      <span>I will only investigate targets I am entitled to investigate, and I accept the
+        <a href="/legal/terms" target="_blank" rel="noopener">Terms</a>, <a href="/legal/acceptable-use" target="_blank" rel="noopener">Acceptable Use</a>
+        and <a href="/legal/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</span>
+    </label>
+  {% endif %}
+  <button{% if unavailable %} disabled{% endif %}>Sign in</button>
+  {% if mode == "accounts" %}
+    {% if registration != "closed" %}<p class="alt">New here? <a href="/register">Create an account</a></p>{% endif %}
+    <p class="alt"><a href="/">&larr; Back to the home page</a></p>
+  {% endif %}
 </form>
 </body>
 </html>

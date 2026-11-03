@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OSINT Hub - open-source investigation toolkit</title>
+<meta name="description" content="{{ total }} open-source intelligence tools in one place, with built-in lookups for domains, IPs, emails, usernames, phone numbers and more. Free and open source.">
+<style nonce="{{ nonce }}">
+  :root{--bg:#f6f7f9;--card:#fff;--text:#1b1f24;--muted:#5d6672;--line:#dde1e6;--accent:#1f6feb;--ok:#1a7f37;--warn:#9a6700;--bad:#cf222e}
+  @media (prefers-color-scheme:dark){:root{--bg:#0e1116;--card:#161b22;--text:#e6edf3;--muted:#8b949e;--line:#2b323b;--accent:#4493f8;--ok:#3fb950;--warn:#d29922;--bad:#f85149}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 system-ui,-apple-system,Segoe UI,sans-serif}
+  a{color:var(--accent)}
+  .wrap{max-width:1040px;margin:0 auto;padding:0 20px}
+  header.top{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 0;flex-wrap:wrap}
+  .logo{font-weight:700;font-size:18px;color:var(--text);text-decoration:none}
+  .nav{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .btn{display:inline-block;padding:9px 16px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:#fff;text-decoration:none;font-size:15px;cursor:pointer;font-family:inherit}
+  .btn.ghost{background:transparent;color:var(--accent)}
+  .hero{padding:48px 0 32px;text-align:center}
+  .hero h1{font-size:clamp(28px,5vw,46px);line-height:1.15;margin:0 0 14px}
+  .hero p{max-width:640px;margin:0 auto 22px;color:var(--muted);font-size:18px}
+  .cta{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:36px 0}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;text-align:center}
+  .stat b{display:block;font-size:28px}
+  .stat span{color:var(--muted);font-size:14px}
+  h2{font-size:26px;margin:44px 0 6px}
+  .lead{color:var(--muted);margin:0 0 18px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px}
+  .card h3{margin:0 0 6px;font-size:17px}
+  .card p{margin:0;color:var(--muted);font-size:15px}
+  ol.steps{counter-reset:s;list-style:none;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
+  ol.steps li{counter-increment:s;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px}
+  ol.steps li::before{content:counter(s);display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;font-weight:700;margin-bottom:8px}
+  .rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+  .rules .card.no{border-color:var(--bad)}
+  .rules .card.yes{border-color:var(--ok)}
+  .rules ul{margin:6px 0 0;padding-left:20px;color:var(--muted);font-size:15px}
+  .notice{border:1px solid var(--warn);border-radius:10px;padding:14px 16px;margin-top:20px;color:var(--text);font-size:15px}
+  .band{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:30px;text-align:center;margin:44px 0}
+  footer{border-top:1px solid var(--line);margin-top:40px;padding:24px 0 40px;color:var(--muted);font-size:14px}
+  footer a{margin-right:14px}
+  #lang{font:inherit;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--text)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="logo" href="/">OSINT Hub</a>
+    <div class="nav">
+      <select id="lang" aria-label="Language"><option value="en">English</option><option value="bn">বাংলা</option></select>
+      <a href="{{ repo }}" rel="noopener" data-t="source">Source code</a>
+      {% if signed_in %}
+        <a class="btn" href="/app" data-t="open">Open the app</a>
+      {% else %}
+        <a class="btn ghost" href="/login" data-t="signin">Sign in</a>
+        {% if registration != "closed" %}<a class="btn" href="/register" data-t="join">Create account</a>{% endif %}
+      {% endif %}
+    </div>
+  </header>
+
+  <section class="hero">
+    <h1 data-t="h1">Every open-source investigation tool, in one place.</h1>
+    <p data-t="sub">Look up domains, IP addresses, emails, usernames, phone numbers and more. Keep notes in private cases and export a report. Free, open source and built to be used responsibly.</p>
+    <div class="cta">
+      {% if signed_in %}
+        <a class="btn" href="/app" data-t="open">Open the app</a>
+      {% elif registration != "closed" %}
+        <a class="btn" href="/register" data-t="start">Get started, it is free</a>
+        <a class="btn ghost" href="/login" data-t="signin">Sign in</a>
+      {% else %}
+        <a class="btn" href="/login" data-t="signin">Sign in</a>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="stats" aria-label="Numbers">
+    <div class="stat"><b>{{ total }}</b><span data-t="s1">catalogued tools</span></div>
+    <div class="stat"><b>{{ categories }}</b><span data-t="s2">categories</span></div>
+    <div class="stat"><b>{{ types }}</b><span data-t="s3">target types with built-in lookups</span></div>
+    <div class="stat"><b>0</b><span data-t="s4">targets stored in logs</span></div>
+  </section>
+
+  <h2 data-t="fh">What you get</h2>
+  <p class="lead" data-t="fl">Everything is in your browser. No software to install.</p>
+  <div class="grid">
+    <div class="card"><h3 data-t="f1h">Investigate</h3><p data-t="f1p">Paste a domain, IP, email, username, phone, URL, crypto address or company. The type is detected automatically and lookups run for you.</p></div>
+    <div class="card"><h3 data-t="f2h">Browse the catalog</h3><p data-t="f2p">Search and filter {{ total }} tools from the OSINT Framework by category, price and whether they have an API.</p></div>
+    <div class="card"><h3 data-t="f3h">Private cases</h3><p data-t="f3p">Save results with your notes. Cases belong to your account only. Export as Markdown, JSON or a printable report.</p></div>
+    <div class="card"><h3 data-t="f4h">Toolbox</h3><p data-t="f4p">Encode, decode and hash text, generate search dorks and read photo metadata, all without leaving the page.</p></div>
+    <div class="card"><h3 data-t="f5h">Privacy first</h3><p data-t="f5p">The audit log keeps only a keyed hash of each target, never the target or your IP.{% if retention %} Saved cases are deleted after {{ retention }} days.{% endif %} You can export or delete your data at any time.</p></div>
+    <div class="card"><h3 data-t="f6h">Open source</h3><p data-t="f6p">The whole project is public. Read it, audit it, run your own copy or improve it.</p></div>
+  </div>
+
+  <h2 data-t="hh">How it works</h2>
+  <ol class="steps">
+    <li><h3 data-t="h1h">Create an account</h3><p class="lead" data-t="h1p">Email and password. You accept the rules of use once.</p></li>
+    <li><h3 data-t="h2h">Say why you are looking</h3><p class="lead" data-t="h2p">Pick a purpose for each investigation, for example checking your own assets or a suspected scam.</p></li>
+    <li><h3 data-t="h3h">Get results and save them</h3><p class="lead" data-t="h3p">Review the findings, follow the suggested next steps and keep what matters in a case.</p></li>
+  </ol>
+
+  <h2 data-t="rh">Rules of use</h2>
+  <p class="lead" data-t="rl">Public does not mean harmless. These rules are part of the terms you accept.</p>
+  <div class="rules">
+    <div class="card yes"><h3 data-t="r1h">Good uses</h3>
+      <ul><li data-t="r1a">Checking your own accounts, domains and assets</li><li data-t="r1b">Security work you are authorised to do</li><li data-t="r1c">Journalism, fact-checking and research in the public interest</li><li data-t="r1d">Checking a suspected scam or phishing attempt</li></ul></div>
+    <div class="card no"><h3 data-t="r2h">Not allowed</h3>
+      <ul><li data-t="r2a">Stalking, harassing, threatening or doxxing anyone</li><li data-t="r2b">Finding where a private person lives or works</li><li data-t="r2c">Fraud, blackmail or any unlawful purpose</li><li data-t="r2d">Automated mass scanning of people</li></ul></div>
+  </div>
+  <p class="notice" data-t="rn">Accounts that break these rules can be removed. Read the full <a href="/legal/acceptable-use">Acceptable Use Policy</a>.</p>
+
+  <section class="band">
+    <h2 style="margin-top:0" data-t="bh">Ready to try it?</h2>
+    <div class="cta">
+      {% if signed_in %}<a class="btn" href="/app" data-t="open">Open the app</a>
+      {% elif registration != "closed" %}<a class="btn" href="/register" data-t="start">Get started, it is free</a>{% else %}<a class="btn" href="/login" data-t="signin">Sign in</a>{% endif %}
+    </div>
+  </section>
+
+  <footer>
+    <div>
+      <a href="/legal/terms">Terms</a><a href="/legal/privacy">Privacy</a><a href="/legal/acceptable-use">Acceptable use</a><a href="/legal/disclaimer">Disclaimer</a><a href="{{ repo }}" rel="noopener">GitHub</a>
+    </div>
+    <p>{% if operator %}Operated by {{ operator }}. {% endif %}OSINT Hub is open-source software. The catalog is based on the OSINT Framework. No warranty; you are responsible for how you use it.</p>
+  </footer>
+</div>
+
+<script nonce="{{ nonce }}">
+const bn={source:'সোর্স কোড',open:'অ্যাপ খুলুন',signin:'সাইন ইন',join:'অ্যাকাউন্ট খুলুন',start:'শুরু করুন, বিনামূল্যে',
+h1:'সব ওপেন-সোর্স ইনভেস্টিগেশন টুল, এক জায়গায়।',
+sub:'ডোমেইন, আইপি, ইমেইল, ইউজারনেম, ফোন নম্বর এবং আরও অনেক কিছু খুঁজে দেখুন। নিজের প্রাইভেট কেসে নোট রাখুন ও রিপোর্ট নামান। বিনামূল্যে, ওপেন সোর্স এবং দায়িত্বশীল ব্যবহারের জন্য তৈরি।',
+s1:'টি টুলের ক্যাটালগ',s2:'টি ক্যাটাগরি',s3:'ধরনের টার্গেটে বিল্ট-ইন লুকআপ',s4:'টার্গেট লগে সংরক্ষিত',
+fh:'আপনি যা পাবেন',fl:'সবকিছু ব্রাউজারেই। কিছু ইনস্টল করতে হয় না।',
+f1h:'অনুসন্ধান',f1p:'ডোমেইন, আইপি, ইমেইল, ইউজারনেম, ফোন, ইউআরএল, ক্রিপ্টো অ্যাড্রেস বা কোম্পানি পেস্ট করুন। ধরন নিজে থেকে চেনা হয়।',
+f2h:'ক্যাটালগ ঘুরে দেখুন',f2p:'ক্যাটাগরি, দাম ও এপিআই অনুযায়ী টুল খুঁজুন ও ফিল্টার করুন।',
+f3h:'প্রাইভেট কেস',f3p:'নোটসহ ফলাফল সংরক্ষণ করুন। কেস শুধু আপনার অ্যাকাউন্টের। Markdown, JSON বা প্রিন্টযোগ্য রিপোর্টে এক্সপোর্ট করুন।',
+f4h:'টুলবক্স',f4p:'টেক্সট এনকোড, ডিকোড ও হ্যাশ করুন, সার্চ ডর্ক বানান এবং ছবির মেটাডেটা পড়ুন।',
+f5h:'গোপনীয়তা আগে',f5p:'অডিট লগে শুধু টার্গেটের হ্যাশ থাকে, টার্গেট বা আপনার আইপি নয়। যেকোনো সময় নিজের ডেটা এক্সপোর্ট বা মুছে ফেলতে পারবেন।',
+f6h:'ওপেন সোর্স',f6p:'পুরো প্রজেক্ট পাবলিক। পড়ুন, যাচাই করুন, নিজের কপি চালান বা উন্নত করুন।',
+hh:'কীভাবে কাজ করে',h1h:'অ্যাকাউন্ট খুলুন',h1p:'ইমেইল ও পাসওয়ার্ড। ব্যবহারের নিয়ম একবার মেনে নিতে হবে।',
+h2h:'কেন খুঁজছেন বলুন',h2p:'প্রতিটি অনুসন্ধানে একটি উদ্দেশ্য বেছে নিন, যেমন নিজের সম্পদ বা সন্দেহজনক প্রতারণা যাচাই।',
+h3h:'ফলাফল দেখুন ও সংরক্ষণ করুন',h3p:'ফলাফল দেখুন, পরের ধাপের পরামর্শ অনুসরণ করুন এবং দরকারি অংশ কেসে রাখুন।',
+rh:'ব্যবহারের নিয়ম',rl:'পাবলিক মানেই নিরীহ নয়। এই নিয়মগুলো আপনার মেনে নেওয়া শর্তের অংশ।',
+r1h:'ভালো ব্যবহার',r1a:'নিজের অ্যাকাউন্ট, ডোমেইন ও সম্পদ যাচাই',r1b:'অনুমতিপ্রাপ্ত নিরাপত্তা কাজ',r1c:'সাংবাদিকতা, ফ্যাক্ট-চেক ও জনস্বার্থে গবেষণা',r1d:'সন্দেহজনক প্রতারণা বা ফিশিং যাচাই',
+r2h:'নিষিদ্ধ',r2a:'কাউকে স্টকিং, হয়রানি, হুমকি বা ডক্সিং',r2b:'কোনো ব্যক্তির বাসা বা কর্মস্থল খুঁজে বের করা',r2c:'প্রতারণা, ব্লাকমেইল বা যেকোনো বেআইনি উদ্দেশ্য',r2d:'মানুষের ওপর স্বয়ংক্রিয় গণ-স্ক্যান',
+bh:'চেষ্টা করতে প্রস্তুত?'};
+const en={};
+document.querySelectorAll('[data-t]').forEach(e=>{en[e.dataset.t]=e.innerHTML});
+function setLang(l){
+  document.documentElement.lang=l;
+  document.querySelectorAll('[data-t]').forEach(e=>{
+    const k=e.dataset.t;
+    if(l==='bn'&&bn[k]){e.textContent=bn[k]}else if(en[k]!==undefined){e.innerHTML=en[k]}
+  });
+  try{localStorage.setItem('lang',l)}catch(e){}
+}
+const sel=document.getElementById('lang');
+sel.onchange=()=>setLang(sel.value);
+try{const l=localStorage.getItem('lang');if(l==='bn'){sel.value='bn';setLang('bn')}}catch(e){}
+</script>
+</body>
+</html>

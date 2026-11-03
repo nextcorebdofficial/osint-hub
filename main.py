@@ -14,11 +14,12 @@ import time
 import uuid
 from collections import deque
 from pathlib import Path
+from urllib.parse import urlparse
 
 import httpx
 import markdown
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 BASE = Path(__file__).parent
@@ -37,6 +38,13 @@ def _load_dotenv() -> None:
 _load_dotenv()
 
 
+def auth_mode() -> str:
+    """'accounts' (email + password, set AUTH_MODE=accounts), 'password' (one shared APP_PASSWORD) or 'none'."""
+    if os.environ.get("AUTH_MODE", "").strip().lower() == "accounts":
+        return "accounts"
+    return "password" if os.environ.get("APP_PASSWORD") else "none"
+
+
 def cases_enabled() -> bool:
     """Cases have no per-user separation, so a public instance without a login must not store them.
 
@@ -45,7 +53,7 @@ def cases_enabled() -> bool:
     v = os.environ.get("CASES_ENABLED", "").strip().lower()
     if v:
         return v not in ("0", "false", "no", "off")
-    return not (serverless() and not os.environ.get("APP_PASSWORD"))
+    return not (serverless() and auth_mode() == "none")
 
 
 def serverless() -> bool:
@@ -53,13 +61,24 @@ def serverless() -> bool:
     return bool(os.environ.get("VERCEL") or os.environ.get("SERVERLESS"))
 
 
-import db  # noqa: E402  (needs env loaded first)
+import auth  # noqa: E402  (needs env loaded first)
+import db  # noqa: E402
 import extras  # noqa: E402
 import lookups  # noqa: E402
 import report  # noqa: E402
 
-app = FastAPI(title="OSINT Hub")
+# The interactive API docs list every endpoint; keep them for self-hosters, hide them on account instances.
+_docs = {} if auth_mode() != "accounts" else {"docs_url": None, "redoc_url": None, "openapi_url": None}
+app = FastAPI(title="OSINT Hub", **_docs)
 templates = Jinja2Templates(directory=str(BASE / "templates"))
+REPO_URL = os.environ.get("REPO_URL", "https://github.com/nextcorebdofficial/osint-hub")
+
+
+def page(request: Request, name: str, ctx: dict | None = None, status: int = 200):
+    """Render a template with the per-request CSP nonce every inline script and style tag needs."""
+    return templates.TemplateResponse(
+        request, name, {"nonce": getattr(request.state, "nonce", ""), **(ctx or {})}, status_code=status)
+
 
 # ---------------------------------------------------------------- catalog
 
@@ -218,7 +237,7 @@ async def _run_job(job: dict, kind: str, value: str, opts: dict) -> None:
         job["status"] = "done"
     except Exception as e:  # surfaced to the UI as a message
         job["status"] = "error"
-        job["error"] = str(e) or e.__class__.__name__
+        job["error"] = (str(e) or e.__class__.__name__)[:200]
 
 
 # ---------------------------------------------------------------- auth and rate limiting
@@ -227,7 +246,6 @@ SECRET = os.environ.get("APP_SECRET") or secrets.token_hex(16)
 if serverless() and not os.environ.get("APP_SECRET"):
     # Every serverless instance would invent its own secret, so logins would fail at random.
     print("WARNING: APP_SECRET is not set; login cookies will not be valid across instances", flush=True)
-OPEN_PATHS = {"/login", "/api/health"}
 _HITS: dict[tuple, deque] = {}
 
 
@@ -263,58 +281,292 @@ SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "no-referrer",
-    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()",
     "Cache-Control": "no-store",
+    "Cross-Origin-Opener-Policy": "same-origin",
+    "Cross-Origin-Resource-Policy": "same-origin",
+    "X-Permitted-Cross-Domain-Policies": "none",
 }
-CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
-       "img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+
+
+def _csp(nonce: str) -> str:
+    # Scripts and style blocks need the per-request nonce; only style="" attributes stay unrestricted.
+    return (f"default-src 'self'; script-src 'self' 'nonce-{nonce}'; style-src 'self' 'nonce-{nonce}'; "
+            "style-src-attr 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; "
+            "object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+
+
+MAX_JSON_BODY = 1_000_000
+
+
+def max_upload() -> int:
+    return 4_000_000 if serverless() else 15_000_000  # Vercel rejects bodies above ~4.5 MB anyway
 
 
 @app.middleware("http")
 async def guard(request: Request, call_next):
+    request.state.nonce = secrets.token_urlsafe(16)
+    request.state.user = None
     resp = await _gate(request, call_next)
     for k, v in SECURITY_HEADERS.items():
         resp.headers.setdefault(k, v)
     if not request.url.path.startswith(("/docs", "/redoc", "/openapi.json")):
-        resp.headers.setdefault("Content-Security-Policy", CSP)
+        resp.headers.setdefault("Content-Security-Policy", _csp(request.state.nonce))
+    if request.url.scheme == "https" or serverless():
+        resp.headers.setdefault("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
     return resp
 
 
+OPEN_PATHS = {"/login", "/api/health", "/robots.txt", "/.well-known/security.txt"}
+ACCOUNT_PUBLIC = {"/", "/register"}
+
+
+def _same_origin(request: Request) -> bool:
+    origin = request.headers.get("origin")
+    if origin is None:  # not a browser cross-site request (curl, tests, same-site navigations)
+        return True
+    host = (request.headers.get("x-forwarded-host") if serverless() else None) or request.headers.get("host", "")
+    return origin != "null" and urlparse(origin).netloc == host
+
+
+_USERS: dict[int, tuple[float, dict | None]] = {}
+
+
+def _user_cached(uid: int) -> dict | None:
+    hit = _USERS.get(uid)
+    if hit and time.time() - hit[0] < 60:
+        return hit[1]
+    try:
+        user = db.get_user(uid)
+    except Exception:
+        return None  # database unreachable: treat as signed out rather than failing open
+    if len(_USERS) > 1000:
+        _USERS.clear()
+    _USERS[uid] = (time.time(), user)
+    return user
+
+
+def _session_user(request: Request) -> dict | None:
+    tok = request.cookies.get("osint_session", "")
+    uid = auth.session_uid(tok)
+    if uid is None:
+        return None
+    user = _user_cached(uid)
+    return user if user and auth.session_valid(SECRET, tok, user) else None
+
+
+def _uid(request: Request) -> int | None:
+    u = getattr(request.state, "user", None)
+    return u["id"] if u else None
+
+
 async def _gate(request: Request, call_next):
-    path = request.url.path
-    if os.environ.get("APP_PASSWORD") and path not in OPEN_PATHS and not path.startswith("/legal/"):
-        if not hmac.compare_digest(request.cookies.get("osint_session", ""), _token()):
+    path, method, mode = request.url.path, request.method, auth_mode()
+    cl = request.headers.get("content-length", "")
+    if cl.isdigit() and int(cl) > (max_upload() + 100_000 if path == "/api/toolbox/exif" else MAX_JSON_BODY):
+        return JSONResponse({"detail": "request body too large"}, status_code=413)
+    if method in ("POST", "PUT", "PATCH", "DELETE") and not _same_origin(request):
+        return JSONResponse({"detail": "cross-site request blocked"}, status_code=403)
+
+    public = path in OPEN_PATHS or path.startswith("/legal/") or (mode == "accounts" and path in ACCOUNT_PUBLIC)
+    if mode == "accounts":
+        request.state.user = _session_user(request) if request.cookies.get("osint_session") else None
+    if mode != "none" and not public:
+        ok = (hmac.compare_digest(request.cookies.get("osint_session", ""), _token()) if mode == "password"
+              else request.state.user is not None)
+        if not ok:
             if path.startswith("/api"):
                 return JSONResponse({"detail": "login required"}, status_code=401)
             return RedirectResponse("/login", status_code=303)
     if path.startswith(("/api/cases", "/api/items")) and not cases_enabled():
         return JSONResponse({"detail": "saved cases are turned off on this instance"}, status_code=403)
-    heavy = request.method == "POST" and path in ("/api/investigate", "/api/jobs", "/api/toolbox/exif")
-    limit = int(os.environ.get("RATE_LIMIT_HEAVY", "20" if heavy else "300")) if heavy else \
-        int(os.environ.get("RATE_LIMIT_GENERAL", "300"))
-    ip = _client_ip(request)
-    if not _allow(ip, "heavy" if heavy else "general", limit):
+
+    login_post = method == "POST" and path in ("/login", "/register")
+    heavy = method == "POST" and path in ("/api/investigate", "/api/jobs", "/api/toolbox/exif")
+    if login_post:
+        bucket, limit = "auth", int(os.environ.get("RATE_LIMIT_AUTH", "10"))
+    elif heavy:
+        bucket, limit = "heavy", int(os.environ.get("RATE_LIMIT_HEAVY", "20"))
+    else:
+        bucket, limit = "general", int(os.environ.get("RATE_LIMIT_GENERAL", "300"))
+    who = f"u{request.state.user['id']}" if request.state.user and not login_post else _client_ip(request)
+    if not _allow(who, bucket, limit):
         return JSONResponse({"detail": "rate limit exceeded, try again in a minute"}, status_code=429)
     return await call_next(request)
 
 
+def _set_session(resp, request: Request, value: str) -> None:
+    resp.set_cookie("osint_session", value, httponly=True, samesite="lax", max_age=7 * 86400,
+                    secure=request.url.scheme == "https"
+                    or (serverless() and request.headers.get("x-forwarded-proto") == "https"))
+
+
+# ---------------------------------------------------------------- sign in, accounts
+
+_FAILS: dict[str, list[float]] = {}  # email -> recent failed attempts (per instance, best effort)
+LOCK_AFTER, LOCK_WINDOW = 5, 900
+
+
+def _locked(email: str) -> bool:
+    now = time.time()
+    recent = [x for x in _FAILS.get(email, []) if now - x < LOCK_WINDOW]
+    _FAILS[email] = recent
+    if len(_FAILS) > 5000:
+        _FAILS.clear()
+    return len(recent) >= LOCK_AFTER
+
+
+def registration_mode() -> str:
+    v = os.environ.get("REGISTRATION", "open").strip().lower()
+    return v if v in ("open", "invite", "closed") else "open"
+
+
+def _csv(name: str) -> set[str]:
+    return {x.strip().lower() for x in os.environ.get(name, "").split(",") if x.strip()}
+
+
+def may_register(email: str) -> bool:
+    mode = registration_mode()
+    if mode == "closed":
+        return False
+    if mode == "invite":
+        return email in _csv("ALLOWED_EMAILS") or email.split("@")[1] in _csv("ALLOWED_EMAIL_DOMAINS")
+    return True
+
+
+def accounts_problem() -> str:
+    """Why accounts cannot work on this deployment yet, or an empty string."""
+    if serverless() and not os.environ.get("APP_SECRET"):
+        return "APP_SECRET is not set"
+    if db.backend() == "sqlite-temp" and not os.environ.get("ALLOW_TEMP_ACCOUNTS"):
+        return "no persistent database: set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN"
+    return ""
+
+
+def _auth_page(request: Request, name: str, error: str = "", status: int = 200):
+    problem = auth_mode() == "accounts" and accounts_problem()
+    if problem:
+        print("ACCOUNTS UNAVAILABLE: " + problem, flush=True)
+    return page(request, name, {
+        "error": error, "mode": auth_mode(), "unavailable": bool(problem),
+        "registration": registration_mode(), "operator": os.environ.get("OPERATOR_NAME", "").strip()}, status)
+
+
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
-    return templates.TemplateResponse(request, "login.html", {"error": False})
+    if auth_mode() == "accounts" and _session_user(request):
+        return RedirectResponse("/app", status_code=303)
+    return _auth_page(request, "login.html")
 
 
 @app.post("/login")
-async def login(request: Request, password: str = Form("")):
-    expected = os.environ.get("APP_PASSWORD", "")
-    if not expected:
+async def login(request: Request, password: str = Form(""), email: str = Form("")):
+    mode = auth_mode()
+    if mode == "none":
         return RedirectResponse("/", status_code=303)
-    if hmac.compare_digest(password.encode(), expected.encode()):
-        resp = RedirectResponse("/", status_code=303)
-        resp.set_cookie("osint_session", _token(), httponly=True, samesite="lax", max_age=7 * 86400,
-                        secure=request.url.scheme == "https"
-                        or (serverless() and request.headers.get("x-forwarded-proto") == "https"))
-        return resp
-    return templates.TemplateResponse(request, "login.html", {"error": True}, status_code=401)
+    if mode == "password":
+        expected = os.environ.get("APP_PASSWORD", "")
+        if hmac.compare_digest(password.encode(), expected.encode()):
+            resp = RedirectResponse("/", status_code=303)
+            _set_session(resp, request, _token())
+            return resp
+        return _auth_page(request, "login.html", "Wrong password.", 401)
+    if accounts_problem():
+        return _auth_page(request, "login.html", "", 503)
+    try:
+        email = auth.clean_email(email)
+    except ValueError:
+        email = ""
+    if email and _locked(email):
+        return _auth_page(request, "login.html", "Too many attempts. Try again in 15 minutes.", 429)
+    user = db.get_user_by_email(email) if email else None
+    # Always run the hash so a wrong email takes as long as a wrong password.
+    ok = auth.verify_password(password[:auth.MAX_PASSWORD], user["pw"] if user else auth.DUMMY_HASH)
+    if not (user and ok):
+        if email:
+            _FAILS.setdefault(email, []).append(time.time())
+        return _auth_page(request, "login.html", "Wrong email or password.", 401)
+    _FAILS.pop(email, None)
+    resp = RedirectResponse("/app", status_code=303)
+    _set_session(resp, request, auth.make_session(SECRET, user))
+    return resp
+
+
+@app.get("/register", response_class=HTMLResponse)
+async def register_page(request: Request):
+    if auth_mode() != "accounts":
+        raise HTTPException(404, "not found")
+    return _auth_page(request, "register.html")
+
+
+@app.post("/register")
+async def register(request: Request, email: str = Form(""), password: str = Form(""),
+                   password2: str = Form(""), terms: str = Form("")):
+    if auth_mode() != "accounts":
+        raise HTTPException(404, "not found")
+    if accounts_problem():
+        return _auth_page(request, "register.html", "", 503)
+    try:
+        email = auth.clean_email(email)
+        if not may_register(email):
+            raise ValueError("Registration is not open for this email address on this instance.")
+        if password != password2:
+            raise ValueError("The two passwords do not match.")
+        auth.check_password(password, email)
+        if terms != "on":
+            raise ValueError("You must accept the terms and the acceptable use policy.")
+    except ValueError as e:
+        return _auth_page(request, "register.html", str(e), 400)
+    uid = db.create_user(email, auth.hash_password(password), time.time())
+    if uid is None:
+        return _auth_page(request, "register.html", "This email is already registered. Sign in instead.", 409)
+    resp = RedirectResponse("/app", status_code=303)
+    _set_session(resp, request, auth.make_session(SECRET, db.get_user(uid)))
+    return resp
+
+
+@app.post("/logout")
+async def logout():
+    resp = RedirectResponse("/", status_code=303)
+    resp.delete_cookie("osint_session")
+    return resp
+
+
+@app.get("/api/account/export")
+async def account_export(request: Request):
+    if not request.state.user:
+        raise HTTPException(404, "no account")
+    return Response(json.dumps(db.export_user(request.state.user["id"]), indent=2), media_type="application/json",
+                    headers={"Content-Disposition": 'attachment; filename="osint-hub-my-data.json"'})
+
+
+@app.delete("/api/account")
+async def account_delete(request: Request, payload: dict):
+    user = request.state.user
+    if not user:
+        raise HTTPException(404, "no account")
+    if not auth.verify_password(str(payload.get("password", ""))[:auth.MAX_PASSWORD], user["pw"]):
+        raise HTTPException(403, "wrong password")
+    db.delete_user(user["id"])
+    _USERS.pop(user["id"], None)
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie("osint_session")
+    return resp
+
+
+@app.get("/robots.txt", response_class=PlainTextResponse)
+async def robots():
+    return "User-agent: *\nAllow: /$\nAllow: /legal/\nDisallow: /app\nDisallow: /api/\nDisallow: /login\nDisallow: /register\n"
+
+
+@app.get("/.well-known/security.txt", response_class=PlainTextResponse)
+async def security_txt():
+    contact = os.environ.get("OPERATOR_CONTACT", "").strip()
+    if not contact:
+        raise HTTPException(404, "not configured")
+    target = contact if contact.startswith(("http://", "https://", "mailto:")) else "mailto:" + contact
+    expires = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 365 * 86400))
+    return f"Contact: {target}\nExpires: {expires}\nPreferred-Languages: en, bn\n"
 
 
 # ---------------------------------------------------------------- accountability and data minimisation
@@ -378,7 +630,7 @@ async def legal(request: Request, name: str):
     text = (text.replace("[OPERATOR_NAME]", op or "[OPERATOR_NAME]")
             .replace("[OPERATOR_CONTACT]", contact or "[OPERATOR_CONTACT]")
             .replace("[JURISDICTION]", law or "[JURISDICTION]"))
-    return templates.TemplateResponse(request, "legal.html", {
+    return page(request, "legal.html", {
         "title": title, "body": markdown.markdown(text, extensions=["tables"]),
         "configured": bool(op and contact and law)})
 
@@ -387,8 +639,18 @@ async def legal(request: Request, name: str):
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse(request, "index.html", {
-        "total": len(TOOLS), "categories": CATEGORIES})
+    if auth_mode() == "accounts":
+        return page(request, "landing.html", {
+            "total": len(TOOLS), "categories": len(CATEGORIES), "types": len(TARGET_CATEGORIES),
+            "registration": registration_mode(), "operator": os.environ.get("OPERATOR_NAME", "").strip(),
+            "repo": REPO_URL, "signed_in": request.state.user is not None,
+            "retention": int(os.environ.get("CASE_RETENTION_DAYS") or 0)})
+    return await app_page(request)
+
+
+@app.get("/app", response_class=HTMLResponse)
+async def app_page(request: Request):
+    return page(request, "index.html", {"total": len(TOOLS), "categories": CATEGORIES})
 
 
 @app.get("/api/health")
@@ -397,8 +659,10 @@ async def health():
 
 
 @app.get("/api/config")
-async def config():
-    return {"keys": lookups.configured_keys(), "auth": bool(os.environ.get("APP_PASSWORD")),
+async def config(request: Request):
+    user = getattr(request.state, "user", None)
+    return {"keys": lookups.configured_keys(), "auth": auth_mode() != "none", "auth_mode": auth_mode(),
+            "user": user["email"] if user else "",
             "encode_ops": list(extras.OPS), "target_types": list(TARGET_CATEGORIES),
             "purposes": PURPOSES, "serverless": serverless(), "storage": db.backend(),
             "cases": cases_enabled(),
@@ -445,7 +709,7 @@ async def investigate(payload: dict):
     _audit(kind, value, payload["purpose"])
     try:
         return await run_investigation(kind, value, payload, {})
-    except ValueError as e:
+    except (ValueError, TypeError) as e:
         raise HTTPException(400, str(e))
 
 
@@ -463,11 +727,13 @@ async def start_job(payload: dict):
         JOBS.pop(next(iter(JOBS)))
     if serverless():
         # No background task can outlive the response here, so do the work inside this request.
-        opts = {**payload, "limit": min(int(payload.get("limit") or 150), 200)}
         try:
+            opts = {**payload, "limit": min(int(payload.get("limit") or 150), 200)}
             result = await run_investigation(kind, value, opts, {})
+        except (ValueError, TypeError) as e:
+            raise HTTPException(400, str(e))
         except Exception as e:
-            return {"status": "error", "error": str(e) or e.__class__.__name__}
+            return {"status": "error", "error": (str(e) or e.__class__.__name__)[:200]}
         return {"status": "done", "result": result, "type": kind, "value": value}
     job_id = uuid.uuid4().hex
     job = {"status": "running", "progress": {}, "type": kind, "value": value}
@@ -487,62 +753,63 @@ async def job_status(job_id: str):
 # ---------------------------------------------------------------- routes: cases
 
 @app.get("/api/cases")
-async def cases():
+async def cases(request: Request):
     _purge_old_cases()
-    return db.list_cases()
+    return db.list_cases(_uid(request))
 
 
 @app.post("/api/cases")
-async def new_case(payload: dict):
+async def new_case(request: Request, payload: dict):
     name = str(payload.get("name", "")).strip()
     if not name or len(name) > 120:
         raise HTTPException(400, "name is required (max 120 characters)")
-    return db.create_case(name)
+    return db.create_case(name, _uid(request))
 
 
 @app.get("/api/cases/{case_id}")
-async def case_detail(case_id: int):
-    case = db.get_case(case_id)
+async def case_detail(case_id: int, request: Request):
+    case = db.get_case(case_id, _uid(request))
     if not case:
         raise HTTPException(404, "case not found")
     return case
 
 
 @app.delete("/api/cases/{case_id}")
-async def remove_case(case_id: int):
-    if not db.delete_case(case_id):
+async def remove_case(case_id: int, request: Request):
+    if not db.delete_case(case_id, _uid(request)):
         raise HTTPException(404, "case not found")
     return {"ok": True}
 
 
 @app.post("/api/cases/{case_id}/items")
-async def save_item(case_id: int, payload: dict):
+async def save_item(case_id: int, request: Request, payload: dict):
     result = payload.get("result")
     if not isinstance(result, dict) or not payload.get("value") or not payload.get("kind"):
         raise HTTPException(400, "kind, value and result are required")
-    item = db.add_item(case_id, str(payload["kind"]), str(payload["value"]), result, str(payload.get("note", "")))
+    item = db.add_item(case_id, str(payload["kind"]), str(payload["value"]), result, str(payload.get("note", ""))[:2000],
+                       _uid(request))
     if not item:
         raise HTTPException(404, "case not found")
     return item
 
 
 @app.patch("/api/items/{item_id}")
-async def edit_item(item_id: int, payload: dict):
-    if not db.update_note(item_id, str(payload.get("note", ""))[:2000]):
+async def edit_item(item_id: int, request: Request, payload: dict):
+    if not db.update_note(item_id, str(payload.get("note", ""))[:2000], _uid(request)):
         raise HTTPException(404, "item not found")
     return {"ok": True}
 
 
 @app.delete("/api/items/{item_id}")
-async def remove_item(item_id: int):
-    if not db.delete_item(item_id):
+async def remove_item(item_id: int, request: Request):
+    if not db.delete_item(item_id, _uid(request)):
         raise HTTPException(404, "item not found")
     return {"ok": True}
 
 
 @app.get("/api/cases/{case_id}/export")
-async def export_case(case_id: int, format: str = "md"):
-    case = db.get_case(case_id)
+async def export_case(case_id: int, request: Request, format: str = "md"):
+    case = db.get_case(case_id, _uid(request))
     if not case:
         raise HTTPException(404, "case not found")
     if format == "json":
@@ -578,9 +845,10 @@ async def toolbox_dorks(payload: dict):
 
 @app.post("/api/toolbox/exif")
 async def toolbox_exif(file: UploadFile = File(...)):
-    data = await file.read(15_000_001)
-    if len(data) > 15_000_000:
-        raise HTTPException(413, "file too large (max 15 MB)")
+    limit = max_upload()
+    data = await file.read(limit + 1)
+    if len(data) > limit:
+        raise HTTPException(413, f"file too large (max {limit // 1_000_000} MB)")
     try:
         return extras.read_exif(data)
     except Exception:

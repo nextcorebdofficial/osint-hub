@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OSINT Hub</title>
-<style>
+<style nonce="{{ nonce }}">
   :root{--bg:#f6f7f9;--card:#fff;--text:#1b1f24;--muted:#5d6672;--line:#dde1e6;--accent:#1f6feb;--ok:#1a7f37;--warn:#9a6700;--bad:#cf222e}
   @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1116;--card:#161b22;--text:#e6edf3;--muted:#8b949e;--line:#2b323b;--accent:#4493f8;--ok:#3fb950;--warn:#d29922;--bad:#f85149}}
   :root[data-theme="dark"]{--bg:#0e1116;--card:#161b22;--text:#e6edf3;--muted:#8b949e;--line:#2b323b;--accent:#4493f8;--ok:#3fb950;--warn:#d29922;--bad:#f85149}
@@ -68,6 +68,11 @@
     <h1>OSINT Hub <small>{{ total }} tools &middot; {{ categories|length }} categories</small></h1>
     <div class="row" style="margin:0">
       <span id="keys" class="muted" style="font-size:12px"></span>
+      <span id="acct" class="muted" style="font-size:12px"></span>
+      <a id="home" href="/" class="hide" style="font-size:13px">Home</a>
+      <button class="ghost hide" id="export" title="Download everything saved under your account">My data</button>
+      <button class="ghost hide" id="delacct" title="Delete your account and everything saved in it">Delete account</button>
+      <button class="ghost hide" id="logout">Log out</button>
       <select id="lang" aria-label="Language"><option value="en">English</option><option value="bn">বাংলা</option></select>
       <button class="ghost" id="theme" aria-label="Toggle theme">&#9680;</button>
     </div>
@@ -167,7 +172,7 @@
   </div>
 </div>
 
-<script>
+<script nonce="{{ nonce }}">
 const $=s=>document.querySelector(s),$$=s=>document.querySelectorAll(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -348,12 +353,23 @@ async function loadConfig(){
   $('#purpose').innerHTML='<option value="">Purpose (required)</option>'+Object.entries(c.purposes).map(([k,v])=>`<option value="${esc(k)}">${esc(v)}</option>`).join('');
   $('#purpose').value=store.get('purpose','');
   $('#purpose').onchange=e=>store.set('purpose',e.target.value);
+  if(c.user){
+    $('#acct').textContent=c.user;['#home','#export','#delacct','#logout'].forEach(s=>$(s).classList.remove('hide'));
+  }else if(c.auth_mode==='password'){$('#logout').classList.remove('hide')}
   casesOn=c.cases!==false;if(!casesOn)$('#t-cases').style.display='none';
   $('#operator').textContent=c.operator?`Operated by ${c.operator}. `:'';
   if(c.retention_days)$('#retention').textContent=`Saved cases are deleted after ${c.retention_days} days. `;
   const on=Object.entries(c.keys).filter(([,v])=>v).map(([k])=>k.replace('_API_KEY',''));
   $('#keys').textContent=on.length?'API keys: '+on.join(', '):'No API keys set (see README)';
 }
+$('#logout').onclick=async()=>{try{await fetch('/logout',{method:'POST'})}catch(e){}location.href='/'};
+$('#export').onclick=()=>{location.href='/api/account/export'};
+$('#delacct').onclick=async()=>{
+  if(!confirm('Delete your account and every case saved in it? This cannot be undone.'))return;
+  const pw=prompt('Type your password to confirm:');if(!pw)return;
+  try{await api('/api/account',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});location.href='/'}
+  catch(e){alert('Could not delete the account: '+e.message)}
+};
 $('#runop').onclick=async()=>{try{$('#opout').textContent=(await post('/api/toolbox/encode',{op:$('#op').value,text:$('#optext').value})).result}catch(e){$('#opout').textContent='Error: '+e.message}};
 $('#rundork').onclick=async()=>{const t=$('#dtarget').value.trim();if(!t)return;
   try{const r=await post('/api/toolbox/dorks',{target:t});

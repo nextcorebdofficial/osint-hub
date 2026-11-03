@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OSINT Hub</title>
+<style>
+  :root{--bg:#f6f7f9;--card:#fff;--text:#1b1f24;--muted:#5d6672;--line:#dde1e6;--accent:#1f6feb;--ok:#1a7f37;--warn:#9a6700;--bad:#cf222e}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1116;--card:#161b22;--text:#e6edf3;--muted:#8b949e;--line:#2b323b;--accent:#4493f8;--ok:#3fb950;--warn:#d29922;--bad:#f85149}}
+  :root[data-theme="dark"]{--bg:#0e1116;--card:#161b22;--text:#e6edf3;--muted:#8b949e;--line:#2b323b;--accent:#4493f8;--ok:#3fb950;--warn:#d29922;--bad:#f85149}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+  header{padding:14px 16px;border-bottom:1px solid var(--line);background:var(--card)}
+  .top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+  h1{margin:0;font-size:20px}
+  h1 small{color:var(--muted);font-weight:400;font-size:13px;margin-left:8px}
+  .bar{display:flex;gap:8px;flex-wrap:wrap}
+  input,select,button,textarea{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--text)}
+  input[type=text]{flex:1;min-width:200px}
+  #region{width:90px;flex:none}
+  button{cursor:pointer;background:var(--accent);color:#fff;border-color:var(--accent)}
+  button.ghost{background:var(--card);color:var(--text);border-color:var(--line)}
+  button.danger{background:var(--card);color:var(--bad);border-color:var(--line)}
+  nav{display:flex;gap:4px;padding:8px 16px 0;flex-wrap:wrap}
+  nav button{border-radius:6px 6px 0 0;background:transparent;color:var(--muted);border:1px solid transparent}
+  nav button.on{background:var(--card);color:var(--text);border-color:var(--line);border-bottom-color:var(--card)}
+  main{display:grid;grid-template-columns:240px 1fr;gap:16px;padding:16px;max-width:1400px;margin:0 auto}
+  main.noside{grid-template-columns:1fr}
+  aside{position:sticky;top:8px;align-self:start;max-height:92vh;overflow:auto}
+  aside a{display:flex;justify-content:space-between;padding:5px 8px;border-radius:6px;color:var(--text);text-decoration:none;font-size:14px;cursor:pointer}
+  aside a:hover,aside a.on{background:var(--card);outline:1px solid var(--line)}
+  aside a span{color:var(--muted)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px}
+  .card h3{margin:0 0 4px;font-size:15px}
+  .card h3 a{color:var(--accent);text-decoration:none}
+  .card p{margin:6px 0;color:var(--muted);font-size:13px}
+  .path{font-size:12px;color:var(--muted)}
+  .tag{display:inline-block;font-size:11px;padding:1px 7px;border:1px solid var(--line);border-radius:10px;margin:2px 4px 0 0;color:var(--muted)}
+  .tag.free{color:var(--ok)}.tag.paid{color:var(--warn)}.tag.active{color:var(--bad)}.tag.on{color:var(--ok)}
+  pre{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px;overflow:auto;font-size:12.5px;max-height:420px;margin:8px 0}
+  .muted{color:var(--muted)}.err{color:var(--bad)}
+  .hide{display:none}
+  .found a,.links a{display:block;padding:2px 0;color:var(--accent)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+  .chip{padding:2px 9px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--accent);font-size:12.5px;cursor:pointer}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0}
+  svg.graph{width:100%;max-width:720px;height:auto;background:var(--card);border:1px solid var(--line);border-radius:8px}
+  svg.graph line{stroke:var(--line)}svg.graph text{fill:var(--text);font-size:10.5px}
+  svg.graph circle{fill:var(--accent)}svg.graph circle.c{fill:var(--ok)}
+  svg.graph g{cursor:pointer}
+  .two{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}
+  textarea{width:100%;min-height:80px}
+  @media(max-width:760px){main{grid-template-columns:1fr}aside{position:static;max-height:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <h1>OSINT Hub <small>{{ total }} tools &middot; {{ categories|length }} categories</small></h1>
+    <div class="row" style="margin:0">
+      <span id="keys" class="muted" style="font-size:12px"></span>
+      <select id="lang" aria-label="Language"><option value="en">English</option><option value="bn">বাংলা</option></select>
+      <button class="ghost" id="theme" aria-label="Toggle theme">&#9680;</button>
+    </div>
+  </div>
+  <div class="bar">
+    <input type="text" id="target" data-ip="ph" placeholder="Investigate: domain, IP, email, username, phone, URL, crypto address, company..." autocomplete="off">
+    <select id="ttype">
+      <option value="" data-i="auto">auto-detect</option><option>username</option><option>email</option><option>domain</option>
+      <option>ip</option><option>phone</option><option>url</option><option>crypto</option><option>company</option>
+    </select>
+    <input type="text" id="region" placeholder="BD" maxlength="2" title="Phone region if no +country code">
+    <button id="go" data-i="go">Investigate</button>
+  </div>
+</header>
+<nav>
+  <button id="t-inv" class="on" data-i="inv">Investigation</button>
+  <button id="t-cat" data-i="cat">Catalog</button>
+  <button id="t-cases" data-i="cases">Cases</button>
+  <button id="t-box" data-i="box">Toolbox</button>
+</nav>
+
+<main id="main" class="noside">
+  <aside id="side" class="hide"></aside>
+  <section>
+    <!-- Investigation -->
+    <div id="inv">
+      <p class="muted" data-i="intro">Enter a target above. The hub runs built-in lookups and lists every framework tool relevant to that target type. Click any value in the results to pivot.</p>
+      <div id="invout"></div>
+    </div>
+
+    <!-- Catalog -->
+    <div id="cat" class="hide">
+      <div class="bar" style="margin-bottom:12px">
+        <input type="text" id="q" placeholder="Filter tools by name or description">
+        <select id="pricing"><option value="">any price</option><option>free</option><option>freemium</option><option>paid</option></select>
+        <select id="flag"><option value="">any type</option><option value="api">has API</option><option value="local">local install</option><option value="dork">Google dork</option></select>
+      </div>
+      <p class="muted" id="count"></p>
+      <div class="grid" id="list"></div>
+      <p><button class="ghost hide" id="more">Load more</button></p>
+    </div>
+
+    <!-- Cases -->
+    <div id="cases" class="hide">
+      <div class="bar" style="margin-bottom:12px">
+        <input type="text" id="newcase" placeholder="New case name">
+        <button id="mkcase">Create case</button>
+      </div>
+      <div class="two"><div id="caselist"></div><div id="casedetail"></div></div>
+    </div>
+
+    <!-- Toolbox -->
+    <div id="box" class="hide">
+      <div class="two">
+        <div class="card">
+          <h3>Encode / decode / hash</h3>
+          <div class="row"><select id="op"></select><button id="runop">Run</button></div>
+          <textarea id="optext" placeholder="Input"></textarea>
+          <pre id="opout">Output appears here</pre>
+        </div>
+        <div class="card">
+          <h3>Google dork generator</h3>
+          <div class="row"><input type="text" id="dtarget" placeholder="domain, email, username, phone or company"><button id="rundork">Generate</button></div>
+          <div id="dorkout" class="links"></div>
+        </div>
+        <div class="card">
+          <h3>Image EXIF / GPS reader</h3>
+          <p class="muted">Reads metadata from a photo you upload. The file is processed in memory and not stored.</p>
+          <div class="row"><input type="file" id="exiffile" accept="image/*"><button id="runexif">Read</button></div>
+          <pre id="exifout">Output appears here</pre>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+const $=s=>document.querySelector(s),$$=s=>document.querySelectorAll(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const store={get(k,d){try{return localStorage.getItem(k)||d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+
+/* ---------- language ---------- */
+const I18N={
+  en:{go:'Investigate',inv:'Investigation',cat:'Catalog',cases:'Cases',box:'Toolbox',auto:'auto-detect',
+      intro:'Enter a target above. The hub runs built-in lookups and lists every framework tool relevant to that target type. Click any value in the results to pivot.',
+      ph:'Investigate: domain, IP, email, username, phone, URL, crypto address, company...'},
+  bn:{go:'অনুসন্ধান',inv:'অনুসন্ধান',cat:'ক্যাটালগ',cases:'কেস',box:'টুলবক্স',auto:'স্বয়ংক্রিয়',
+      intro:'উপরে একটি টার্গেট দিন। হাব বিল্ট-ইন লুকআপ চালাবে এবং ওই টাইপের জন্য প্রাসঙ্গিক সব টুল দেখাবে। ফলাফলের যেকোনো মানে ক্লিক করলে সেটা নিয়ে নতুন অনুসন্ধান শুরু হবে।',
+      ph:'অনুসন্ধান: ডোমেইন, IP, ইমেইল, username, ফোন, URL, ক্রিপ্টো ঠিকানা, কোম্পানি...'}
+};
+let lang=store.get('lang','en');
+function applyLang(){const t=I18N[lang]||I18N.en;
+  $$('[data-i]').forEach(e=>{if(t[e.dataset.i])e.textContent=t[e.dataset.i]});
+  $$('[data-ip]').forEach(e=>{if(t[e.dataset.ip])e.placeholder=t[e.dataset.ip]});
+  document.documentElement.lang=lang;$('#lang').value=lang;}
+$('#lang').onchange=e=>{lang=e.target.value;store.set('lang',lang);applyLang()};
+
+/* ---------- theme ---------- */
+function setTheme(t){document.documentElement.dataset.theme=t;store.set('theme',t)}
+const savedTheme=store.get('theme','');if(savedTheme)setTheme(savedTheme);
+$('#theme').onclick=()=>{
+  const dark=document.documentElement.dataset.theme==='dark'||(!document.documentElement.dataset.theme&&matchMedia('(prefers-color-scheme: dark)').matches);
+  setTheme(dark?'light':'dark')};
+
+/* ---------- api ---------- */
+async function api(path,opt){
+  const r=await fetch(path,opt);
+  if(r.status===401){location='/login';throw new Error('login required')}
+  if(!r.ok){let m=r.statusText;try{m=(await r.json()).detail||m}catch(e){}throw new Error(m)}
+  return r.json();
+}
+const post=(p,b)=>api(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+
+/* ---------- tabs ---------- */
+const TABS=['inv','cat','cases','box'];
+function show(w){
+  TABS.forEach(t=>{$('#'+t).classList.toggle('hide',t!==w);$('#t-'+t).classList.toggle('on',t===w)});
+  $('#side').classList.toggle('hide',w!=='cat');$('#main').classList.toggle('noside',w!=='cat');
+  if(w==='cat')reload();if(w==='cases')loadCases();if(w==='inv')fillCaseSelect();
+}
+TABS.forEach(t=>$('#t-'+t).onclick=()=>show(t));
+
+/* ---------- catalog ---------- */
+let cat='',offset=0;const PAGE=60;
+function card(t){
+  return `<div class="card"><h3><a href="${esc(t.url)}" target="_blank" rel="noopener noreferrer">${esc(t.name)}</a></h3>
+  <div class="path">${esc(t.path)}</div><p>${esc(t.description)}</p>
+  ${t.pricing?`<span class="tag ${esc(t.pricing)}">${esc(t.pricing)}</span>`:''}
+  ${t.opsec?`<span class="tag ${t.opsec==='active'?'active':''}">${esc(t.opsec)} opsec</span>`:''}
+  ${t.api?'<span class="tag">API</span>':''}${t.local?'<span class="tag">local</span>':''}
+  ${t.dork?'<span class="tag">dork</span>':''}${t.registration?'<span class="tag">signup</span>':''}
+  ${t.deprecated?'<span class="tag active">deprecated</span>':''}</div>`;
+}
+async function loadSide(){
+  const cats=await api('/api/categories');
+  $('#side').innerHTML='<a data-c="" class="on">All <span></span></a>'+cats.map(c=>`<a data-c="${esc(c.name)}">${esc(c.name)} <span>${c.count}</span></a>`).join('');
+  $('#side').onclick=e=>{const a=e.target.closest('a');if(!a)return;cat=a.dataset.c;
+    $$('aside a').forEach(x=>x.classList.toggle('on',x===a));reload();};
+}
+async function reload(append=false){
+  if(!append)offset=0;
+  const p=new URLSearchParams({q:$('#q').value,category:cat,pricing:$('#pricing').value,flag:$('#flag').value,limit:PAGE,offset});
+  const r=await api('/api/tools?'+p);
+  $('#list').innerHTML=(append?$('#list').innerHTML:'')+r.items.map(card).join('');
+  offset+=r.items.length;
+  $('#count').textContent=`${r.total} tools`+(cat?` in ${cat}`:'');
+  $('#more').classList.toggle('hide',offset>=r.total);
+}
+let timer;['#q','#pricing','#flag'].forEach(s=>$(s).oninput=()=>{clearTimeout(timer);timer=setTimeout(reload,200)});
+$('#more').onclick=()=>reload(true);
+
+/* ---------- investigation ---------- */
+let last=null;
+const IP4=/\b(?:\d{1,3}\.){3}\d{1,3}\b/g,DOM=/\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b/gi,MAIL=/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g;
+function pivots(d){
+  if(d.type==='username')return [];
+  const s=JSON.stringify(d.lookup||{});const set=new Set();
+  (s.match(IP4)||[]).forEach(x=>{if(x.split('.').every(n=>+n<256))set.add(x)});
+  (s.match(MAIL)||[]).forEach(x=>set.add(x.toLowerCase()));
+  (s.match(DOM)||[]).forEach(x=>{x=x.toLowerCase().replace(/\.$/,'');if(!/\.(json|html|js|png|jpg)$/.test(x))set.add(x)});
+  set.delete(String(d.value).toLowerCase());
+  return [...set].slice(0,60);
+}
+function graph(center,nodes){
+  const n=nodes.slice(0,40),W=720,H=440,cx=W/2,cy=H/2;
+  let h=`<svg class="graph" viewBox="0 0 ${W} ${H}" role="img" aria-label="Entity graph">`;
+  const pos=n.map((_,i)=>{const a=2*Math.PI*i/n.length,r=i%2?170:205;return[cx+r*Math.cos(a)*1.25,cy+r*Math.sin(a)*0.95]});
+  pos.forEach(p=>h+=`<line x1="${cx}" y1="${cy}" x2="${p[0]}" y2="${p[1]}"/>`);
+  n.forEach((v,i)=>{const [x,y]=pos[i];h+=`<g data-pivot="${esc(v)}"><circle cx="${x}" cy="${y}" r="5"/><text x="${x}" y="${y-8}" text-anchor="middle">${esc(v.length>26?v.slice(0,25)+'…':v)}</text></g>`});
+  h+=`<circle class="c" cx="${cx}" cy="${cy}" r="9"/><text x="${cx}" y="${cy+24}" text-anchor="middle" style="font-weight:600">${esc(center)}</text></svg>`;
+  return h;
+}
+function render(d){
+  const L=d.lookup||{};let h=`<h2>${esc(d.value)} <span class="tag">${esc(d.type)}</span>${d.cached?'<span class="tag">cached</span>':''}</h2>`;
+  h+=`<div class="row"><select id="casesel"></select><button class="ghost" id="savecase">Save to case</button><span id="savemsg" class="muted"></span></div>`;
+  if(L.found){
+    h+=`<h3>Found on ${L.found.length} of ${L.sites_checked} sites checked</h3><div class="card found">`+
+      L.found.map(f=>`<a href="${esc(f.url)}" target="_blank" rel="noopener noreferrer">${esc(f.site)} <span class="muted">${esc(f.category||'')}</span></a>`).join('')+'</div>';
+  }else if(Object.keys(L).length){
+    h+=`<h3>Built-in lookup results</h3><pre>${esc(JSON.stringify(L,null,2))}</pre>`;
+  }else h+='<p class="muted">No built-in lookup for this type; use the tools below.</p>';
+  const pv=pivots(d);
+  if(pv.length){
+    h+=`<h3>Pivot (${pv.length}) <span class="muted" style="font-weight:400;font-size:13px">click to investigate</span></h3>`+graph(d.value,pv)+
+       `<div class="chips">${pv.map(v=>`<span class="chip" data-pivot="${esc(v)}">${esc(v)}</span>`).join('')}</div>`;
+  }
+  h+=`<h3>Relevant tools (${d.tools.length}) from: ${d.tool_categories.map(esc).join(', ')}</h3><div class="grid">${d.tools.map(card).join('')}</div>`;
+  $('#invout').innerHTML=h;fillCaseSelect();
+}
+async function investigate(v){
+  const value=(v||$('#target').value).trim();if(!value)return;
+  if(v){$('#target').value=v;$('#ttype').value=''}
+  show('inv');$('#invout').innerHTML='<p class="muted">Running lookups...</p>';
+  try{
+    const {id}=await post('/api/jobs',{value,type:$('#ttype').value||undefined,region:$('#region').value.trim().toUpperCase()||undefined});
+    let j;
+    do{await sleep(700);j=await api('/api/jobs/'+id);const p=j.progress||{};
+      $('#invout').innerHTML=`<p class="muted">Running lookups... ${p.total?`checked ${p.checked||0} / ${p.total} sites`:'(domain lookups can take up to 30 seconds)'}</p>`;
+    }while(j.status==='running');
+    if(j.status==='error')throw new Error(j.error);
+    last=j.result;render(last);
+  }catch(e){$('#invout').innerHTML='<p class="err">Error: '+esc(e.message)+'</p>'}
+}
+$('#go').onclick=()=>investigate();
+$('#target').onkeydown=e=>{if(e.key==='Enter')investigate()};
+$('#invout').onclick=e=>{
+  const p=e.target.closest('[data-pivot]');if(p){investigate(p.dataset.pivot);return}
+  if(e.target.id==='savecase')saveToCase();
+};
+
+/* ---------- cases ---------- */
+async function fillCaseSelect(){
+  const sel=$('#casesel');if(!sel)return;
+  const cs=await api('/api/cases'),prev=sel.value;
+  sel.innerHTML=cs.length?cs.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join(''):'<option value="">(create a case in the Cases tab)</option>';
+  if(prev&&cs.some(c=>String(c.id)===prev))sel.value=prev;
+}
+async function saveToCase(){
+  const id=$('#casesel').value;
+  if(!id){$('#savemsg').textContent='Create a case first (Cases tab).';return}
+  if(!last)return;
+  try{await post(`/api/cases/${id}/items`,{kind:last.type,value:last.value,result:last.lookup});
+    $('#savemsg').textContent='Saved.'}catch(e){$('#savemsg').textContent=e.message}
+}
+async function loadCases(){
+  const cs=await api('/api/cases');
+  $('#caselist').innerHTML=cs.length?cs.map(c=>`<div class="card" style="margin-bottom:8px"><b>${esc(c.name)}</b> <span class="muted">${c.items} item(s)</span>
+    <div class="row"><button class="ghost" data-open="${c.id}">Open</button><button class="danger" data-delcase="${c.id}">Delete</button></div></div>`).join(''):'<p class="muted">No cases yet.</p>';
+}
+async function openCase(id){
+  const c=await api('/api/cases/'+id);
+  $('#casedetail').innerHTML=`<div class="card"><h3>${esc(c.name)}</h3>
+    <div class="row"><a href="/api/cases/${id}/export?format=md">Markdown</a><a href="/api/cases/${id}/export?format=json">JSON</a><a href="/api/cases/${id}/export?format=html" target="_blank">Printable HTML (save as PDF)</a></div>
+    ${c.items.map(i=>`<div class="card" style="margin:8px 0"><span class="tag">${esc(i.kind)}</span><b>${esc(i.value)}</b>
+      <input type="text" data-note="${i.id}" value="${esc(i.note)}" placeholder="Note" style="width:100%;margin:6px 0">
+      <details><summary class="muted">Result</summary><pre>${esc(JSON.stringify(i.result,null,2))}</pre></details>
+      <button class="danger" data-delitem="${i.id}" data-case="${id}">Remove</button></div>`).join('')||'<p class="muted">No items yet. Run an investigation and use "Save to case".</p>'}</div>`;
+}
+$('#mkcase').onclick=async()=>{const n=$('#newcase').value.trim();if(!n)return;
+  try{await post('/api/cases',{name:n});$('#newcase').value='';loadCases()}catch(e){alert(e.message)}};
+$('#cases').onclick=async e=>{
+  const t=e.target;
+  if(t.dataset.open)openCase(t.dataset.open);
+  if(t.dataset.delcase&&confirm('Delete this case and its items?')){await api('/api/cases/'+t.dataset.delcase,{method:'DELETE'});$('#casedetail').innerHTML='';loadCases()}
+  if(t.dataset.delitem){await api('/api/items/'+t.dataset.delitem,{method:'DELETE'});openCase(t.dataset.case);loadCases()}
+};
+$('#cases').onchange=async e=>{if(e.target.dataset.note)await api('/api/items/'+e.target.dataset.note,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({note:e.target.value})})};
+
+/* ---------- toolbox ---------- */
+async function loadConfig(){
+  const c=await api('/api/config');
+  $('#op').innerHTML=c.encode_ops.map(o=>`<option>${esc(o)}</option>`).join('');
+  const on=Object.entries(c.keys).filter(([,v])=>v).map(([k])=>k.replace('_API_KEY',''));
+  $('#keys').textContent=on.length?'API keys: '+on.join(', '):'No API keys set (see README)';
+}
+$('#runop').onclick=async()=>{try{$('#opout').textContent=(await post('/api/toolbox/encode',{op:$('#op').value,text:$('#optext').value})).result}catch(e){$('#opout').textContent='Error: '+e.message}};
+$('#rundork').onclick=async()=>{const t=$('#dtarget').value.trim();if(!t)return;
+  try{const r=await api('/api/toolbox/dorks?target='+encodeURIComponent(t));
+    $('#dorkout').innerHTML=r.dorks.length?`<p class="muted">Detected: ${esc(r.type)}</p>`+r.dorks.map(d=>`<div><b>${esc(d.label)}</b> <code>${esc(d.query)}</code><br>
+      <a href="${esc(d.google)}" target="_blank" rel="noopener noreferrer" style="display:inline">Google</a> &middot;
+      <a href="${esc(d.duckduckgo)}" target="_blank" rel="noopener noreferrer" style="display:inline">DuckDuckGo</a> &middot;
+      <a href="${esc(d.bing)}" target="_blank" rel="noopener noreferrer" style="display:inline">Bing</a></div>`).join(''):'<p class="muted">No dork templates for this type.</p>'}
+  catch(e){$('#dorkout').innerHTML='<p class="err">'+esc(e.message)+'</p>'}};
+$('#runexif').onclick=async()=>{const f=$('#exiffile').files[0];if(!f)return;
+  const fd=new FormData();fd.append('file',f);
+  try{$('#exifout').textContent=JSON.stringify(await api('/api/toolbox/exif',{method:'POST',body:fd}),null,2)}catch(e){$('#exifout').textContent='Error: '+e.message}};
+
+applyLang();loadSide();loadConfig();
+</script>
+</body>
+</html>

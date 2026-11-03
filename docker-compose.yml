@@ -1,0 +1,13 @@
+services:
+  osint-hub:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - osint-data:/data
+    restart: unless-stopped
+
+volumes:
+  osint-data:

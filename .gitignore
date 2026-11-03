@@ -1,0 +1,18 @@
+# secrets and local data
+.env
+osint.db
+*.db
+dead_links.json
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

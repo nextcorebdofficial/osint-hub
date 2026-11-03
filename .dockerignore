@@ -1,0 +1,7 @@
+.venv
+__pycache__
+*.pyc
+osint.db
+.env
+dead_links.json
+.pytest_cache

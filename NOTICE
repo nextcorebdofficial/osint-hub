@@ -1,0 +1,23 @@
+OSINT Hub third-party notices
+
+1. OSINT Framework
+   The tool directory in data.json is derived from the OSINT Framework
+   (https://osintframework.com/, source: https://github.com/lockfale/OSINT-Framework),
+   created by Justin Nordine and contributors, released under the MIT License.
+   Five entries that perform facial-recognition identification of strangers were
+   removed on purpose (see docs/ETHICS_AND_LEGAL.md).
+
+2. WhatsMyName
+   The username site list (https://github.com/WebBreacher/WhatsMyName) is downloaded
+   at runtime and is not included in this repository. It is published by its authors
+   under its own licence; check the upstream repository for current terms.
+
+3. Python packages
+   FastAPI, Uvicorn, HTTPX, Jinja2, phonenumbers, python-multipart and Pillow are
+   installed from PyPI and keep their own licences.
+
+4. External services
+   The lookups call public services (dns.google, rdap.org, crt.sh, ipwho.is,
+   Internet Archive, Blockstream, Blockscout, GLEIF, SEC EDGAR, Gravatar) and,
+   if you configure keys, Have I Been Pwned, Shodan, VirusTotal and AbuseIPDB.
+   Their terms of service apply to your use.

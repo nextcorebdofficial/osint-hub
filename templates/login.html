@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OSINT Hub Login</title>
+<style>
+  :root{--bg:#f6f7f9;--card:#fff;--text:#1b1f24;--line:#dde1e6;--accent:#1f6feb;--bad:#cf222e}
+  @media (prefers-color-scheme:dark){:root{--bg:#0e1116;--card:#161b22;--text:#e6edf3;--line:#2b323b;--accent:#4493f8;--bad:#f85149}}
+  body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--text);font:15px system-ui,sans-serif}
+  form{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:24px;width:min(340px,90vw)}
+  h1{margin:0 0 14px;font-size:20px}
+  input,button{width:100%;font:inherit;padding:9px 10px;border:1px solid var(--line);border-radius:6px;margin-bottom:10px;background:var(--card);color:var(--text)}
+  button{background:var(--accent);border-color:var(--accent);color:#fff;cursor:pointer}
+  .err{color:var(--bad);margin:0 0 10px}
+</style>
+</head>
+<body>
+<form method="post" action="/login">
+  <h1>OSINT Hub</h1>
+  {% if error %}<p class="err">Wrong password.</p>{% endif %}
+  <input type="password" name="password" placeholder="Password" autofocus required>
+  <button>Sign in</button>
+</form>
+</body>
+</html>

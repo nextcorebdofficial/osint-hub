@@ -287,9 +287,9 @@ async function investigate(v){
   if(!$('#purpose').value){show('inv');$('#invout').innerHTML='<p class="err">Choose a purpose first (the menu next to the Investigate button). Use this tool only on targets you are entitled to investigate.</p>';$('#purpose').focus();return}
   show('inv');$('#invout').innerHTML='<p class="muted">Running lookups...</p>';
   try{
-    const {id}=await post('/api/jobs',{value,type:$('#ttype').value||undefined,region:$('#region').value.trim().toUpperCase()||undefined,purpose:$('#purpose').value});
-    let j;
-    do{await sleep(700);j=await api('/api/jobs/'+id);const p=j.progress||{};
+    const start=await post('/api/jobs',{value,type:$('#ttype').value||undefined,region:$('#region').value.trim().toUpperCase()||undefined,purpose:$('#purpose').value});
+    const id=start.id;let j=start.status?start:null; /* serverless hosts answer in one request */
+    if(!j)do{await sleep(700);j=await api('/api/jobs/'+id);const p=j.progress||{};
       $('#invout').innerHTML=`<p class="muted">Running lookups... ${p.total?`checked ${p.checked||0} / ${p.total} sites`:'(domain lookups can take up to 30 seconds)'}</p>`;
     }while(j.status==='running');
     if(j.status==='error')throw new Error(j.error);

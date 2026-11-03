@@ -19,6 +19,8 @@ cp .env.example .env
 | `AUDIT_LOG` | `audit.log` next to `main.py` | One JSON line per investigation: time, target type, purpose and a keyed hash of the target. Never the target or IP. Set to empty to turn it off. |
 | `RATE_LIMIT_HEAVY` | 20 | Max starts of investigations and EXIF uploads per IP per minute |
 | `RATE_LIMIT_GENERAL` | 300 | Max other requests per IP per minute |
+| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | empty | Store cases in Turso (libSQL) instead of a file. Needed for persistent cases on Vercel. See [DEPLOY_VERCEL.md](DEPLOY_VERCEL.md). |
+| `SERVERLESS` | empty | Set to `1` to run investigations inside one request (set automatically on Vercel). |
 | `DB_PATH` | `osint.db` next to `main.py` | SQLite file for cases |
 | `HIBP_API_KEY` | empty | Have I Been Pwned breach check for emails |
 | `SHODAN_API_KEY` | empty | Shodan host data for IPs |
@@ -27,6 +29,8 @@ cp .env.example .env
 | `SEC_USER_AGENT` | `OSINT-Hub/1.0 admin@localhost` | SEC EDGAR asks for a contact in the User-Agent. Use your own, for example `MyOrg admin@example.com`. |
 
 Keys are never sent to the browser. `/api/config` only says whether each one is set.
+
+Vercel users: see [DEPLOY_VERCEL.md](DEPLOY_VERCEL.md).
 
 ## Getting API keys
 

@@ -5,3 +5,6 @@ osint.db
 .env
 dead_links.json
 .pytest_cache
+.vercel
+*.local.txt
+audit.log

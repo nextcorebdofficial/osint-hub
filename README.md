@@ -133,6 +133,10 @@ In short, and by design:
 
 Use it lawfully, and only on targets you are entitled to investigate.
 
+## Deploying
+
+Docker, a VPS or **Vercel** all work. Step by step for Vercel with your own domain: [docs/DEPLOY_VERCEL.md](docs/DEPLOY_VERCEL.md) ([বাংলা](docs/DEPLOY_VERCEL.bn.md)).
+
 ## Known limitations
 
 Honest list, so nobody is surprised:

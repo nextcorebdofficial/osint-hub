@@ -36,6 +36,12 @@ def _load_dotenv() -> None:
 
 _load_dotenv()
 
+
+def serverless() -> bool:
+    """True on Vercel (or when SERVERLESS=1): no background tasks, no shared memory, read-only disk."""
+    return bool(os.environ.get("VERCEL") or os.environ.get("SERVERLESS"))
+
+
 import db  # noqa: E402  (needs env loaded first)
 import extras  # noqa: E402
 import lookups  # noqa: E402
@@ -207,12 +213,25 @@ async def _run_job(job: dict, kind: str, value: str, opts: dict) -> None:
 # ---------------------------------------------------------------- auth and rate limiting
 
 SECRET = os.environ.get("APP_SECRET") or secrets.token_hex(16)
+if serverless() and not os.environ.get("APP_SECRET"):
+    # Every serverless instance would invent its own secret, so logins would fail at random.
+    print("WARNING: APP_SECRET is not set; login cookies will not be valid across instances", flush=True)
 OPEN_PATHS = {"/login", "/api/health"}
 _HITS: dict[tuple, deque] = {}
 
 
 def _token() -> str:
     return hmac.new(SECRET.encode(), os.environ.get("APP_PASSWORD", "").encode(), hashlib.sha256).hexdigest()
+
+
+def _client_ip(request: Request) -> str:
+    # Behind Vercel's proxy the socket peer is the proxy; the platform sets X-Forwarded-For itself.
+    # Only trusted on Vercel; elsewhere use --proxy-headers with --forwarded-allow-ips.
+    if os.environ.get("VERCEL"):
+        fwd = request.headers.get("x-forwarded-for", "")
+        if fwd:
+            return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "?"
 
 
 def _allow(ip: str, bucket: str, limit: int) -> bool:
@@ -260,7 +279,7 @@ async def _gate(request: Request, call_next):
     heavy = request.method == "POST" and path in ("/api/investigate", "/api/jobs", "/api/toolbox/exif")
     limit = int(os.environ.get("RATE_LIMIT_HEAVY", "20" if heavy else "300")) if heavy else \
         int(os.environ.get("RATE_LIMIT_GENERAL", "300"))
-    ip = request.client.host if request.client else "?"
+    ip = _client_ip(request)
     if not _allow(ip, "heavy" if heavy else "general", limit):
         return JSONResponse({"detail": "rate limit exceeded, try again in a minute"}, status_code=429)
     return await call_next(request)
@@ -279,7 +298,8 @@ async def login(request: Request, password: str = Form("")):
     if hmac.compare_digest(password.encode(), expected.encode()):
         resp = RedirectResponse("/", status_code=303)
         resp.set_cookie("osint_session", _token(), httponly=True, samesite="lax", max_age=7 * 86400,
-                        secure=request.url.scheme == "https")
+                        secure=request.url.scheme == "https"
+                        or (serverless() and request.headers.get("x-forwarded-proto") == "https"))
         return resp
     return templates.TemplateResponse(request, "login.html", {"error": True}, status_code=401)
 
@@ -310,7 +330,8 @@ def _audit(kind: str, value: str, purpose: str) -> None:
         with open(path, "a", encoding="utf-8") as f:
             f.write(line + "\n")
     except OSError:
-        pass
+        # Read-only disk (serverless): the platform runtime logs keep the line instead.
+        print("AUDIT " + line, flush=True)
 
 
 def _purge_old_cases() -> None:
@@ -366,7 +387,7 @@ async def health():
 async def config():
     return {"keys": lookups.configured_keys(), "auth": bool(os.environ.get("APP_PASSWORD")),
             "encode_ops": list(extras.OPS), "target_types": list(TARGET_CATEGORIES),
-            "purposes": PURPOSES,
+            "purposes": PURPOSES, "serverless": serverless(), "storage": db.backend(),
             "operator": os.environ.get("OPERATOR_NAME", "").strip(),
             "retention_days": int(os.environ.get("CASE_RETENTION_DAYS") or 0)}
 
@@ -426,6 +447,14 @@ async def start_job(payload: dict):
     _audit(kind, value, payload["purpose"])
     if len(JOBS) >= 200:
         JOBS.pop(next(iter(JOBS)))
+    if serverless():
+        # No background task can outlive the response here, so do the work inside this request.
+        opts = {**payload, "limit": min(int(payload.get("limit") or 150), 200)}
+        try:
+            result = await run_investigation(kind, value, opts, {})
+        except Exception as e:
+            return {"status": "error", "error": str(e) or e.__class__.__name__}
+        return {"status": "done", "result": result, "type": kind, "value": value}
     job_id = uuid.uuid4().hex
     job = {"status": "running", "progress": {}, "type": kind, "value": value}
     job["task"] = asyncio.create_task(_run_job(job, kind, value, payload))

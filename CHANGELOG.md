@@ -11,6 +11,10 @@ All notable changes are listed here. Format based on [Keep a Changelog](https://
 - Docs: legal compliance guide, abuse and takedown process, code of conduct
 - Security headers and a Content-Security-Policy on all pages
 
+### Added (deployment)
+- Vercel support: `vercel.json`, in-request investigations, Turso storage, stdout audit lines, forwarded client IP
+- Deployment guide in English and Bengali (`docs/DEPLOY_VERCEL.md`)
+
 ### Changed
 - Dork generator is now `POST /api/toolbox/dorks` so targets do not appear in URLs
 

@@ -210,3 +210,99 @@ def test_rate_limit(monkeypatch):
 def test_config_reports_keys():
     c = client.get("/api/config").json()
     assert set(c["keys"]) == set(lookups.KEY_NAMES)
+
+
+# ---------------------------------------------------------------- serverless and Turso
+
+def _fake_turso(monkeypatch):
+    """Stand in for Turso's HTTP API, executing the statements on an in-memory SQLite database."""
+    import sqlite3
+    mem = sqlite3.connect(":memory:", check_same_thread=False)
+    calls = []
+
+    def post(url, token, body):
+        calls.append((url, token))
+        results = []
+        for r in body["requests"]:
+            if r["type"] != "execute":
+                results.append({"type": "ok", "response": {"type": "close"}})
+                continue
+            st = r["stmt"]
+            args = []
+            for a in st.get("args", []):
+                args.append(None if a["type"] == "null" else int(a["value"]) if a["type"] == "integer" else a["value"])
+            cur = mem.execute(st["sql"], args)
+            mem.commit()
+            cols = [{"name": d[0]} for d in cur.description or []]
+
+            def cell(v):
+                if v is None:
+                    return {"type": "null"}
+                if isinstance(v, int):
+                    return {"type": "integer", "value": str(v)}
+                if isinstance(v, float):
+                    return {"type": "float", "value": v}
+                return {"type": "text", "value": v}
+            results.append({"type": "ok", "response": {"type": "execute", "result": {
+                "cols": cols, "rows": [[cell(v) for v in row] for row in cur.fetchall()],
+                "affected_row_count": max(cur.rowcount, 0),
+                "last_insert_rowid": str(cur.lastrowid) if cur.lastrowid else None}}})
+        return {"results": results}
+
+    monkeypatch.setattr(db, "_http_post", post)
+    monkeypatch.setattr(db, "_turso_ready", set())
+    monkeypatch.setenv("TURSO_DATABASE_URL", "libsql://demo-org.turso.io")
+    monkeypatch.setenv("TURSO_AUTH_TOKEN", "tok")
+    return calls
+
+
+def test_turso_backend_full_case_lifecycle(monkeypatch):
+    calls = _fake_turso(monkeypatch)
+    assert db.backend() == "turso"
+    cid = client.post("/api/cases", json={"name": "remote"}).json()["id"]
+    item = client.post(f"/api/cases/{cid}/items", json={
+        "kind": "domain", "value": "a.com", "result": {"x": 1}, "note": "n"}).json()
+    assert client.post("/api/cases/9999/items", json={"kind": "d", "value": "v", "result": {}}).status_code == 404
+    case = client.get(f"/api/cases/{cid}").json()
+    assert case["name"] == "remote" and case["items"][0]["result"] == {"x": 1}
+    assert client.patch(f"/api/items/{item['id']}", json={"note": "edited"}).status_code == 200
+    assert client.get("/api/cases").json()[0]["items"] == 1
+    assert client.delete(f"/api/cases/{cid}").status_code == 200
+    assert client.get(f"/api/cases/{cid}").status_code == 404
+    assert all(u == "https://demo-org.turso.io/v2/pipeline" and t == "tok" for u, t in calls)
+    assert client.get("/api/config").json()["storage"] == "turso"
+
+
+def test_vercel_without_database_uses_temp_sqlite(monkeypatch):
+    monkeypatch.setenv("VERCEL", "1")
+    monkeypatch.delenv("DB_PATH")
+    monkeypatch.delenv("TURSO_DATABASE_URL", raising=False)
+    assert db.backend() == "sqlite-temp"
+    assert db._sqlite_path().startswith(tempfile.gettempdir())
+
+
+def test_serverless_jobs_finish_inside_the_request(monkeypatch):
+    monkeypatch.setenv("SERVERLESS", "1")
+    r = client.post("/api/jobs", json={"value": "+8801712345678", "purpose": P}).json()
+    assert r["status"] == "done" and r["result"]["type"] == "phone"
+    bad = client.post("/api/jobs", json={"value": "example.com", "type": "ip", "purpose": P})
+    assert bad.status_code == 400  # validation errors are still real HTTP errors
+
+
+def test_vercel_client_ip_comes_from_forwarded_header(monkeypatch):
+    monkeypatch.setenv("VERCEL", "1")
+    monkeypatch.setenv("RATE_LIMIT_HEAVY", "1")
+    main._HITS.clear()
+    body = {"value": "+8801712345678", "purpose": P}
+    a = {"x-forwarded-for": "1.1.1.1"}
+    codes = [client.post("/api/investigate", json=body, headers=a).status_code for _ in range(2)]
+    other = client.post("/api/investigate", json=body, headers={"x-forwarded-for": "2.2.2.2"}).status_code
+    assert codes == [200, 429] and other == 200
+    main._HITS.clear()
+
+
+def test_audit_falls_back_to_stdout_when_disk_is_read_only(monkeypatch, capsys):
+    monkeypatch.setenv("AUDIT_LOG", os.path.join(_tmp, "no-such-dir", "audit.log"))
+    main._audit("domain", "example.com", P)
+    out = capsys.readouterr().out
+    assert out.startswith("AUDIT {") and "example.com" not in out

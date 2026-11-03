@@ -37,6 +37,14 @@ def _load_dotenv() -> None:
 
 _load_dotenv()
 
+for _k in ("AUTH_MODE", "APP_SECRET", "APP_PASSWORD", "PUBLIC_URL", "REGISTRATION", "DAILY_INVESTIGATIONS",
+           "TURSO_DATABASE_URL", "TURSO_AUTH_TOKEN", "MAIL_PROVIDER", "MAIL_FROM", "MAIL_API_KEY", "SMTP_HOST",
+           "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "OPERATOR_NAME", "OPERATOR_CONTACT", "OPERATOR_JURISDICTION",
+           "CASE_RETENTION_DAYS", "BRAND_NAME", "ALLOWED_EMAILS", "ALLOWED_EMAIL_DOMAINS", "CASES_ENABLED"):
+    if os.environ.get(_k):
+        os.environ[_k] = os.environ[_k].replace("\ufeff", "").strip().strip("\"'")
+del _k
+
 BRAND = os.environ.get("BRAND_NAME", "").strip() or "NextCore BD"
 
 
@@ -289,7 +297,7 @@ def _allow(ip: str, bucket: str, limit: int) -> bool:
 SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
-    "Referrer-Policy": "no-referrer",
+    "Referrer-Policy": "same-origin",  # no-referrer would make browsers send "Origin: null" on form posts
     "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()",
     "Cache-Control": "no-store",
     "Cross-Origin-Opener-Policy": "same-origin",
@@ -332,8 +340,13 @@ AUTH_POSTS = ("/login", "/register", "/resend", "/forgot", "/reset")
 
 
 def _same_origin(request: Request) -> bool:
+    # Browsers say where a request came from. Sec-Fetch-Site is the most reliable signal and cannot be
+    # forged by a web page; fall back to the Origin header for older browsers.
+    site = request.headers.get("sec-fetch-site")
+    if site is not None:
+        return site in ("same-origin", "none")
     origin = request.headers.get("origin")
-    if origin is None:  # not a browser cross-site request (curl, tests, same-site navigations)
+    if origin is None:  # not a browser (curl, tests)
         return True
     host = (request.headers.get("x-forwarded-host") if serverless() else None) or request.headers.get("host", "")
     return origin != "null" and urlparse(origin).netloc == host
@@ -478,9 +491,10 @@ def _mail_ok(email: str) -> bool:
     return True
 
 
-async def _send_link(request: Request, user: dict, kind: str) -> None:
+async def _send_link(request: Request, user: dict, kind: str) -> str:
+    """'sent', 'throttled' or 'failed'."""
     if not _mail_ok(user["email"]):
-        return
+        return "throttled"
     link = f"{public_url(request)}/{kind}?token={auth.make_link_token(SECRET, kind, user)}"
     if kind == "verify":
         subject, lead, ttl = f"Confirm your email for {BRAND}", "Confirm your email address to finish creating your account.", "48 hours"
@@ -488,7 +502,8 @@ async def _send_link(request: Request, user: dict, kind: str) -> None:
         subject, lead, ttl = f"Reset your {BRAND} password", "Someone asked to reset the password for this account. If that was you, choose a new one.", "1 hour"
     text = (f"{lead}\n\n{link}\n\nThe link works for {ttl}. If you did not ask for this, ignore this email; "
             f"nothing changes.\n\n{BRAND}\n")
-    await asyncio.to_thread(mailer.send, user["email"], subject, text)
+    ok = await asyncio.to_thread(mailer.send, user["email"], subject, text)
+    return "sent" if ok else "failed"
 
 
 def _auth_page(request: Request, name: str, error: str = "", status: int = 200):
@@ -575,7 +590,13 @@ async def register(request: Request, email: str = Form(""), password: str = Form
         return _auth_page(request, "register.html", "This email is already registered. Sign in instead.", 409)
     user = db.get_user(uid)
     if mailer.configured():
-        await _send_link(request, user, "verify")
+        outcome = await _send_link(request, user, "verify")
+        if outcome != "sent":
+            return page(request, "message.html", {
+                "title": "Account created, email not sent",
+                "message": "Your account exists, but we could not send the confirmation email just now. "
+                           "Wait a minute and ask for a new link below.",
+                "link": ("/login", "Back to sign in"), "resend_email": user["email"]}, 202)
         return _auth_page_msg(request, "Check your email",
                               "We sent a confirmation link to your address. Open it to activate your account. "
                               "It can take a minute; look in the spam folder too.")
@@ -751,16 +772,24 @@ def _audit(kind: str, value: str, purpose: str) -> None:
         print("AUDIT " + line, flush=True)
 
 
+_LAST_PURGE = 0.0
+
+
 def _purge_old_cases() -> None:
+    """At most once every 10 minutes per instance, and never at import time (cold starts stay fast)."""
+    global _LAST_PURGE
+    if time.time() - _LAST_PURGE < 600:
+        return
+    _LAST_PURGE = time.time()
     try:
         days = int(os.environ.get("CASE_RETENTION_DAYS") or 0)
     except ValueError:
         days = 0
     if days > 0:
-        db.purge_older_than(days)
-
-
-_purge_old_cases()
+        try:
+            db.purge_older_than(days)
+        except Exception as e:  # a database hiccup must not break the request that triggered the purge
+            print(f"PURGE FAILED {e.__class__.__name__}", flush=True)
 
 LEGAL = {
     "privacy": ("Privacy Policy", "PRIVACY_POLICY.md"),
@@ -802,6 +831,7 @@ async def index(request: Request):
 
 @app.get("/app", response_class=HTMLResponse)
 async def app_page(request: Request):
+    _purge_old_cases()
     return page(request, "index.html", {"total": len(TOOLS), "categories": CATEGORIES})
 
 

@@ -97,7 +97,7 @@ def test_security_headers():
     r = client.get("/api/health")
     assert r.headers["x-frame-options"] == "DENY"
     assert r.headers["x-content-type-options"] == "nosniff"
-    assert r.headers["referrer-policy"] == "no-referrer"
+    assert r.headers["referrer-policy"] == "same-origin"
     assert "frame-ancestors 'none'" in client.get("/").headers["content-security-policy"]
     assert "content-security-policy" not in client.get("/docs").headers  # Swagger UI needs its CDN
 
@@ -691,3 +691,47 @@ def test_accounts_and_usage_work_on_turso(monkeypatch):
     cid = db.create_case("c", uid)["id"]
     assert db.get_case(cid, uid)["name"] == "c" and db.get_case(cid, uid + 1) is None
     assert db.delete_user(uid) and db.get_user(uid) is None and db.list_cases(uid) == []
+
+
+def test_signup_reports_when_the_email_could_not_be_sent(mailbox, monkeypatch):
+    make, sent = mailbox
+    monkeypatch.setattr(main.mailer, "send", lambda *a, **k: False)
+    c = make()
+    r = _signup(c)
+    assert r.status_code == 202 and "email not sent" in r.text and "Send a new confirmation link" in r.text
+    assert db.get_user_by_email("a@example.com") is not None  # the account exists; they can ask for a new link
+    monkeypatch.setattr(main.mailer, "send", lambda to, subject, text, html="": sent.append((to, subject, text)) or True)
+    main._MAILS.clear()
+    assert "we sent a new link" in c.post("/resend", data={"email": "a@example.com"}).text
+    assert sent and "/verify?token=" in sent[-1][2]
+
+
+def test_mailer_logs_provider_errors_without_the_key(monkeypatch, capsys):
+    import mailer
+
+    class R:
+        status_code = 403
+        text = '{"message":"domain not verified"}'
+
+    monkeypatch.setattr(mailer.httpx, "post", lambda url, **kw: R())
+    monkeypatch.setenv("MAIL_PROVIDER", "resend")
+    monkeypatch.setenv("MAIL_API_KEY", "super-secret-key")
+    monkeypatch.setenv("MAIL_FROM", "x <no-reply@example.org>")
+    assert mailer.send("u@example.com", "s", "b") is False
+    out = capsys.readouterr().out
+    assert "MAIL FAILED" in out and "403" in out and "domain not verified" in out and "super-secret-key" not in out
+
+
+def test_browser_form_posts_work_with_the_real_headers_browsers_send(accounts):
+    """Regression: a strict referrer policy made browsers send 'Origin: null', which used to block sign-up."""
+    c = accounts()
+    same = {"sec-fetch-site": "same-origin", "origin": "null"}
+    r = c.post("/register", data={"email": "b@example.com", "password": PW, "password2": PW, "terms": "on"},
+               headers=same, follow_redirects=False)
+    assert r.status_code == 303
+    assert c.get("/login", headers={"sec-fetch-site": "same-origin"}, follow_redirects=False).status_code == 303
+    cross = c.post("/login", data={"email": "b@example.com", "password": PW}, headers={"sec-fetch-site": "cross-site"})
+    assert cross.status_code == 403
+    sameSite = c.post("/login", data={"email": "b@example.com", "password": PW}, headers={"sec-fetch-site": "same-site"})
+    assert sameSite.status_code == 403  # a sibling subdomain is not us
+    assert client.get("/login").headers["referrer-policy"] == "same-origin"

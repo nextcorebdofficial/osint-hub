@@ -25,6 +25,13 @@ def configured() -> bool:
     return False
 
 
+def _ok(provider: str, r) -> bool:
+    if r.status_code < 300:
+        return True
+    print(f"MAIL FAILED provider={provider} status={r.status_code} body={r.text[:200]}", flush=True)
+    return False
+
+
 def send(to: str, subject: str, text: str, html: str = "") -> bool:
     """True when the provider accepted the message. Never raises: callers must not leak failures to users."""
     if not configured():
@@ -37,14 +44,14 @@ def send(to: str, subject: str, text: str, html: str = "") -> bool:
                            headers={"Authorization": "Bearer " + os.environ["MAIL_API_KEY"]},
                            json={"from": os.environ["MAIL_FROM"], "to": [to], "subject": subject,
                                  "text": text, **({"html": html} if html else {})})
-            return r.status_code < 300
+            return _ok(provider, r)
         if provider == "brevo":
             r = httpx.post("https://api.brevo.com/v3/smtp/email", timeout=15,
                            headers={"api-key": os.environ["MAIL_API_KEY"]},
                            json={"sender": {"name": name or addr, "email": addr}, "to": [{"email": to}],
                                  "subject": subject, "textContent": text,
                                  **({"htmlContent": html} if html else {})})
-            return r.status_code < 300
+            return _ok(provider, r)
         msg = EmailMessage()
         msg["From"], msg["To"], msg["Subject"] = os.environ["MAIL_FROM"], to, subject
         msg.set_content(text)
@@ -56,5 +63,6 @@ def send(to: str, subject: str, text: str, html: str = "") -> bool:
                 s.login(os.environ["SMTP_USER"], os.environ.get("SMTP_PASS", ""))
             s.send_message(msg)
         return True
-    except Exception:
+    except Exception as e:
+        print(f"MAIL FAILED provider={provider} error={e.__class__.__name__}: {str(e)[:150]}", flush=True)
         return False

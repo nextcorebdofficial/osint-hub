@@ -111,23 +111,24 @@ def _turso_run(stmts: list[tuple[str, tuple]]) -> list[dict]:
     """Run statements in one round trip, in order. Returns {rows, rowcount, lastrowid} for each."""
     url, token = _turso_url(), os.environ["TURSO_AUTH_TOKEN"]
     if url not in _turso_ready:
-        _http_post(url, token, {"requests": [
-            {"type": "execute", "stmt": {"sql": s}} for s in SCHEMA] + [{"type": "close"}]})
-        cols = _http_post(url, token, {"requests": [
-            {"type": "execute", "stmt": {"sql": "PRAGMA table_info(cases)"}}, {"type": "close"}]})
-        names = [row[1].get("value") for row in
-                 cols["results"][0]["response"]["result"].get("rows", [])]
-        if "user_id" not in names:  # databases created before accounts existed
+        # One round trip for the schema and both column checks; a second only for an old database.
+        reqs = [{"type": "execute", "stmt": {"sql": s}} for s in SCHEMA]
+        reqs += [{"type": "execute", "stmt": {"sql": "PRAGMA table_info(cases)"}},
+                 {"type": "execute", "stmt": {"sql": "PRAGMA table_info(users)"}}, {"type": "close"}]
+        res = _http_post(url, token, {"requests": reqs})["results"]
+        n = len(SCHEMA)
+
+        def names(r):
+            return [row[1].get("value") for row in r["response"]["result"].get("rows", [])]
+
+        alters = []
+        if "user_id" not in names(res[n]):  # databases created before accounts existed
+            alters.append("ALTER TABLE cases ADD COLUMN user_id INTEGER")
+        if "verified" not in names(res[n + 1]):  # created before email confirmation existed
+            alters.append("ALTER TABLE users ADD COLUMN verified REAL")
+        if alters:
             _http_post(url, token, {"requests": [
-                {"type": "execute", "stmt": {"sql": "ALTER TABLE cases ADD COLUMN user_id INTEGER"}},
-                {"type": "close"}]})
-        ucols = _http_post(url, token, {"requests": [
-            {"type": "execute", "stmt": {"sql": "PRAGMA table_info(users)"}}, {"type": "close"}]})
-        if "verified" not in [row[1].get("value") for row in
-                              ucols["results"][0]["response"]["result"].get("rows", [])]:
-            _http_post(url, token, {"requests": [
-                {"type": "execute", "stmt": {"sql": "ALTER TABLE users ADD COLUMN verified REAL"}},
-                {"type": "close"}]})
+                {"type": "execute", "stmt": {"sql": s}} for s in alters] + [{"type": "close"}]})
         _turso_ready.add(url)
     body = {"requests": [
         {"type": "execute", "stmt": {"sql": sql, "args": [_arg(a) for a in args]}} for sql, args in stmts

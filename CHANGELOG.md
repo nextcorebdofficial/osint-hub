@@ -2,6 +2,18 @@
 
 All notable changes are listed here. Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Added
+- Required purpose for every investigation, with an audit log that stores a keyed hash of the target, never the target or IP (`AUDIT_LOG`)
+- Optional retention: `CASE_RETENTION_DAYS` deletes old cases at start
+- Legal pages at `/legal/*` (privacy, terms, acceptable use, disclaimer) filled from `OPERATOR_NAME`, `OPERATOR_CONTACT`, `OPERATOR_JURISDICTION`
+- Docs: legal compliance guide, abuse and takedown process, code of conduct
+- Security headers and a Content-Security-Policy on all pages
+
+### Changed
+- Dork generator is now `POST /api/toolbox/dorks` so targets do not appear in URLs
+
 ## [0.1.0] - 2026-11-03
 
 First public release.

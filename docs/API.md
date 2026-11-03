@@ -84,6 +84,12 @@ Validation errors return `400 {"detail": "..."}`, for example an invalid IP, an 
 
 A section that needs a missing API key contains `{"info": "set ... to enable"}`.
 
+## Purpose and legal pages
+
+`POST /api/investigate` requires a `purpose` field, one of `own-assets`, `authorised-security`, `journalism-research`, `fraud-prevention`, `education`. Otherwise it returns 400. `GET /api/config` lists the allowed values.
+
+`GET /legal/{privacy|terms|acceptable-use|disclaimer}` serves the policies as HTML. They are readable without logging in.
+
 ## Cases
 
 | Method and path | Body | Description |
@@ -102,7 +108,7 @@ A section that needs a missing API key contains `{"info": "set ... to enable"}`.
 | Method and path | Description |
 |---|---|
 | `POST /api/toolbox/encode` | Body `{"op": "base64-encode", "text": "hello"}` returns `{"result": "aGVsbG8="}`. Operations: `base64-encode/decode`, `hex-encode/decode`, `url-encode/decode`, `html-encode/decode`, `binary-encode/decode`, `rot13`, `md5`, `sha1`, `sha256`, `sha512`, `identify-hash`. |
-| `GET /api/toolbox/dorks?target=example.com&type=` | Google dork queries with ready-made Google, DuckDuckGo and Bing links. |
+| `POST /api/toolbox/dorks` | Body `{"target": "example.com", "type"?: ""}`. Google dork queries with ready-made Google, DuckDuckGo and Bing links. POST so targets stay out of URLs and logs. |
 | `POST /api/toolbox/exif` | Multipart upload, field `file`, up to 15 MB. Returns tags and, if present, GPS coordinates with a map link. |
 
 ## Example with curl

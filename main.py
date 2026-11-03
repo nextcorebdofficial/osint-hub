@@ -16,6 +16,7 @@ from collections import deque
 from pathlib import Path
 
 import httpx
+import markdown
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
@@ -228,10 +229,30 @@ def _allow(ip: str, bucket: str, limit: int) -> bool:
     return True
 
 
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "Cache-Control": "no-store",
+}
+CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
+       "img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+
+
 @app.middleware("http")
 async def guard(request: Request, call_next):
+    resp = await _gate(request, call_next)
+    for k, v in SECURITY_HEADERS.items():
+        resp.headers.setdefault(k, v)
+    if not request.url.path.startswith(("/docs", "/redoc", "/openapi.json")):
+        resp.headers.setdefault("Content-Security-Policy", CSP)
+    return resp
+
+
+async def _gate(request: Request, call_next):
     path = request.url.path
-    if os.environ.get("APP_PASSWORD") and path not in OPEN_PATHS:
+    if os.environ.get("APP_PASSWORD") and path not in OPEN_PATHS and not path.startswith("/legal/"):
         if not hmac.compare_digest(request.cookies.get("osint_session", ""), _token()):
             if path.startswith("/api"):
                 return JSONResponse({"detail": "login required"}, status_code=401)
@@ -263,6 +284,71 @@ async def login(request: Request, password: str = Form("")):
     return templates.TemplateResponse(request, "login.html", {"error": True}, status_code=401)
 
 
+# ---------------------------------------------------------------- accountability and data minimisation
+
+PURPOSES = {
+    "own-assets": "Checking my own accounts, domains or assets",
+    "authorised-security": "Security work I am authorised to do (written permission or my employer's assets)",
+    "journalism-research": "Journalism, fact-checking or academic research in the public interest",
+    "fraud-prevention": "Checking a suspected scam, fraud or phishing attempt",
+    "education": "Learning or training on targets I own or that exist for practice",
+}
+
+
+def _audit(kind: str, value: str, purpose: str) -> None:
+    """Append one line per investigation: time, type, purpose and a keyed hash of the target.
+
+    The target itself and the client IP are never written, so the log shows how the tool is used
+    without becoming a list of people who were looked up.
+    """
+    path = os.environ.get("AUDIT_LOG", str(BASE / "audit.log"))
+    if not path:
+        return
+    digest = hmac.new(SECRET.encode(), value.lower().encode(), hashlib.sha256).hexdigest()[:16]
+    line = json.dumps({"t": int(time.time()), "type": kind, "purpose": purpose, "target_hmac": digest})
+    try:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except OSError:
+        pass
+
+
+def _purge_old_cases() -> None:
+    try:
+        days = int(os.environ.get("CASE_RETENTION_DAYS") or 0)
+    except ValueError:
+        days = 0
+    if days > 0:
+        db.purge_older_than(days)
+
+
+_purge_old_cases()
+
+LEGAL = {
+    "privacy": ("Privacy Policy", "PRIVACY_POLICY.md"),
+    "terms": ("Terms of Use", "TERMS_OF_USE.md"),
+    "acceptable-use": ("Acceptable Use Policy", "ACCEPTABLE_USE_POLICY.md"),
+    "disclaimer": ("Disclaimer", "DISCLAIMER.md"),
+}
+
+
+@app.get("/legal/{name}", response_class=HTMLResponse)
+async def legal(request: Request, name: str):
+    if name not in LEGAL:
+        raise HTTPException(404, "unknown page")
+    title, fname = LEGAL[name]
+    text = (BASE / "docs" / "legal" / fname).read_text(encoding="utf-8")
+    op = os.environ.get("OPERATOR_NAME", "").strip()
+    contact = os.environ.get("OPERATOR_CONTACT", "").strip()
+    law = os.environ.get("OPERATOR_JURISDICTION", "").strip()
+    text = (text.replace("[OPERATOR_NAME]", op or "[OPERATOR_NAME]")
+            .replace("[OPERATOR_CONTACT]", contact or "[OPERATOR_CONTACT]")
+            .replace("[JURISDICTION]", law or "[JURISDICTION]"))
+    return templates.TemplateResponse(request, "legal.html", {
+        "title": title, "body": markdown.markdown(text, extensions=["tables"]),
+        "configured": bool(op and contact and law)})
+
+
 # ---------------------------------------------------------------- routes: pages and catalog
 
 @app.get("/", response_class=HTMLResponse)
@@ -279,7 +365,10 @@ async def health():
 @app.get("/api/config")
 async def config():
     return {"keys": lookups.configured_keys(), "auth": bool(os.environ.get("APP_PASSWORD")),
-            "encode_ops": list(extras.OPS), "target_types": list(TARGET_CATEGORIES)}
+            "encode_ops": list(extras.OPS), "target_types": list(TARGET_CATEGORIES),
+            "purposes": PURPOSES,
+            "operator": os.environ.get("OPERATOR_NAME", "").strip(),
+            "retention_days": int(os.environ.get("CASE_RETENTION_DAYS") or 0)}
 
 
 @app.get("/api/categories")
@@ -310,12 +399,15 @@ def _parse_target(payload: dict) -> tuple[str, str]:
     value = str(payload.get("value", "")).strip()
     if not value:
         raise HTTPException(400, "value is required")
+    if payload.get("purpose") not in PURPOSES:
+        raise HTTPException(400, "purpose is required, one of: " + ", ".join(PURPOSES))
     return payload.get("type") or detect_type(value), value
 
 
 @app.post("/api/investigate")
 async def investigate(payload: dict):
     kind, value = _parse_target(payload)
+    _audit(kind, value, payload["purpose"])
     try:
         return await run_investigation(kind, value, payload, {})
     except ValueError as e:
@@ -331,6 +423,7 @@ async def start_job(payload: dict):
         normalize(kind, value)
     except ValueError as e:
         raise HTTPException(400, str(e))
+    _audit(kind, value, payload["purpose"])
     if len(JOBS) >= 200:
         JOBS.pop(next(iter(JOBS)))
     job_id = uuid.uuid4().hex
@@ -352,6 +445,7 @@ async def job_status(job_id: str):
 
 @app.get("/api/cases")
 async def cases():
+    _purge_old_cases()
     return db.list_cases()
 
 
@@ -429,12 +523,13 @@ async def toolbox_encode(payload: dict):
         raise HTTPException(400, str(e))
 
 
-@app.get("/api/toolbox/dorks")
-async def toolbox_dorks(target: str, type: str = ""):
-    target = target.strip()
-    if not target:
-        raise HTTPException(400, "target is required")
-    kind = type or detect_type(target)
+@app.post("/api/toolbox/dorks")
+async def toolbox_dorks(payload: dict):
+    # POST, not GET: the target is personal data and must not end up in URLs or access logs.
+    target = str(payload.get("target", "")).strip()
+    if not target or len(target) > 200:
+        raise HTTPException(400, "target is required (max 200 characters)")
+    kind = payload.get("type") or detect_type(target)
     return {"type": kind, "dorks": extras.dorks(kind, target)}
 
 

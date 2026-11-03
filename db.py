@@ -74,6 +74,17 @@ def add_item(case_id: int, kind: str, value: str, result: dict, note: str = "") 
         return {"id": cur.lastrowid}
 
 
+def purge_older_than(days: int) -> int:
+    """Delete items older than `days`, then cases that are old and have no items left."""
+    cutoff = time.time() - days * 86400
+    with closing(_conn()) as c, c:
+        n = c.execute("DELETE FROM items WHERE created < ?", (cutoff,)).rowcount
+        n += c.execute(
+            "DELETE FROM cases WHERE created < ? AND id NOT IN (SELECT DISTINCT case_id FROM items)",
+            (cutoff,)).rowcount
+    return n
+
+
 def update_note(item_id: int, note: str) -> bool:
     with closing(_conn()) as c, c:
         return c.execute("UPDATE items SET note = ? WHERE id = ?", (note, item_id)).rowcount > 0

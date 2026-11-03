@@ -122,6 +122,8 @@ python -m pytest -q test_app.py       # run the offline tests
 
 OSINT only uses public information, but public does not mean harmless. People can be harassed, stalked or defrauded with it. Please read [docs/ETHICS_AND_LEGAL.md](docs/ETHICS_AND_LEGAL.md) before you use or deploy this project.
 
+The app asks for a purpose on every investigation, keeps an audit log without storing targets, can auto-delete old cases (`CASE_RETENTION_DAYS`), and serves policy pages at `/legal/*`. If you host it for others, set `OPERATOR_NAME`, `OPERATOR_CONTACT` and `OPERATOR_JURISDICTION`, and read [docs/LEGAL_COMPLIANCE_GUIDE.md](docs/LEGAL_COMPLIANCE_GUIDE.md) and [docs/ABUSE_AND_TAKEDOWN.md](docs/ABUSE_AND_TAKEDOWN.md).
+
 In short, and by design:
 
 - **No facial-recognition search engines.** FaceCheck, PimEyes, Lenso and FaceSeek are removed from the dataset and from the updater, because they identify strangers from a photo without consent.

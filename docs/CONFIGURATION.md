@@ -14,6 +14,9 @@ cp .env.example .env
 |---|---|---|
 | `APP_PASSWORD` | empty (no login) | Turns on the login page. Strongly recommended for anything other than your own laptop. |
 | `APP_SECRET` | random per start | Signs the login cookie. Set a fixed long random value, otherwise everyone is logged out on every restart. Generate one with `python -c "import secrets; print(secrets.token_hex(32))"`. |
+| `OPERATOR_NAME`, `OPERATOR_CONTACT`, `OPERATOR_JURISDICTION` | empty | Who runs this instance. Filled into the `/legal/*` pages. Until all three are set, those pages show a warning. Required if other people use your instance. |
+| `CASE_RETENTION_DAYS` | 0 (keep forever) | Delete saved cases and items older than this many days, at every start. 30 is a good value for shared instances. |
+| `AUDIT_LOG` | `audit.log` next to `main.py` | One JSON line per investigation: time, target type, purpose and a keyed hash of the target. Never the target or IP. Set to empty to turn it off. |
 | `RATE_LIMIT_HEAVY` | 20 | Max starts of investigations and EXIF uploads per IP per minute |
 | `RATE_LIMIT_GENERAL` | 300 | Max other requests per IP per minute |
 | `DB_PATH` | `osint.db` next to `main.py` | SQLite file for cases |
@@ -73,4 +76,7 @@ osint.example.com {
 - [ ] Served over HTTPS
 - [ ] Running behind a proxy with `--proxy-headers`
 - [ ] `.env` and `osint.db` are not in version control or a public web root
+- [ ] `OPERATOR_NAME`, `OPERATOR_CONTACT` and `OPERATOR_JURISDICTION` set so the legal pages are complete
+- [ ] `CASE_RETENTION_DAYS` set (for example 30) if the instance is shared
+- [ ] You have read [LEGAL_COMPLIANCE_GUIDE.md](LEGAL_COMPLIANCE_GUIDE.md) and [ABUSE_AND_TAKEDOWN.md](ABUSE_AND_TAKEDOWN.md)
 - [ ] You have read [ETHICS_AND_LEGAL.md](ETHICS_AND_LEGAL.md) and decided who may use the instance

@@ -20,6 +20,12 @@
   <h1>OSINT Hub</h1>
   {% if error %}<p class="err">Wrong password.</p>{% endif %}
   <input type="password" name="password" placeholder="Password" autofocus required>
+  <label style="display:flex;gap:8px;font-size:13px;margin-bottom:10px;align-items:flex-start">
+    <input type="checkbox" required style="width:auto;margin:3px 0 0">
+    <span>I will only investigate targets I am entitled to investigate, and I accept the
+      <a href="/legal/terms" target="_blank">Terms</a>, <a href="/legal/acceptable-use" target="_blank">Acceptable Use</a>
+      and <a href="/legal/privacy" target="_blank">Privacy Policy</a>.</span>
+  </label>
   <button>Sign in</button>
 </form>
 </body>

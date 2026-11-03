@@ -40,7 +40,7 @@
   .tag.free{color:var(--ok)}.tag.paid{color:var(--warn)}.tag.active{color:var(--bad)}.tag.on{color:var(--ok)}
   pre{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px;overflow:auto;font-size:12.5px;max-height:420px;margin:8px 0}
   .muted{color:var(--muted)}.err{color:var(--bad)}
-  .hide{display:none}
+  .hide{display:none !important}
   .found a,.links a{display:block;padding:2px 0;color:var(--accent)}
   .chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
   .chip{padding:2px 9px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--accent);font-size:12.5px;cursor:pointer}
@@ -51,6 +51,14 @@
   svg.graph g{cursor:pointer}
   .two{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}
   textarea{width:100%;min-height:80px}
+  footer{max-width:1400px;margin:0 auto;padding:16px;color:var(--muted);font-size:12.5px}
+  footer a{color:var(--accent)}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:grid;place-items:center;z-index:10;padding:16px}
+  .modal.hide{display:none !important}
+  .modal .box{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:20px;max-width:560px;max-height:90vh;overflow:auto}
+  .modal .box h2{margin-top:0}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  #purpose{max-width:260px}
   @media(max-width:760px){main{grid-template-columns:1fr}aside{position:static;max-height:none}}
 </style>
 </head>
@@ -71,6 +79,7 @@
       <option>ip</option><option>phone</option><option>url</option><option>crypto</option><option>company</option>
     </select>
     <input type="text" id="region" placeholder="BD" maxlength="2" title="Phone region if no +country code">
+    <select id="purpose" aria-label="Purpose" title="Why are you investigating this target? Required."><option value="">Purpose (required)</option></select>
     <button id="go" data-i="go">Investigate</button>
   </div>
 </header>
@@ -135,6 +144,28 @@
     </div>
   </section>
 </main>
+
+<footer>
+  <span id="operator"></span><span id="retention"></span>
+  Use only on targets you are entitled to investigate. No facial recognition, no scanning, no ownership look-up of phone numbers.
+  <a href="/legal/terms">Terms</a> &middot; <a href="/legal/privacy">Privacy</a> &middot;
+  <a href="/legal/acceptable-use">Acceptable use</a> &middot; <a href="/legal/disclaimer">Disclaimer</a>
+</footer>
+
+<div id="consent" class="modal hide" role="dialog" aria-modal="true" aria-labelledby="ctitle">
+  <div class="box">
+    <h2 id="ctitle">Before you use OSINT Hub</h2>
+    <p>This tool only looks at public information, but public information can still be used to hurt people. By continuing you confirm that:</p>
+    <ul>
+      <li>you will only investigate targets you are <b>entitled to investigate</b> (your own assets, work you are authorised to do, or genuine public-interest research);</li>
+      <li>you will <b>not</b> use it to stalk, harass, threaten, expose or pressure anyone, or to make decisions about hiring, credit, housing or insurance;</li>
+      <li>you understand results may be wrong, and a match is a lead to verify, not proof;</li>
+      <li>you have read the <a href="/legal/terms" target="_blank">Terms</a>, <a href="/legal/acceptable-use" target="_blank">Acceptable Use Policy</a> and <a href="/legal/privacy" target="_blank">Privacy Policy</a>.</li>
+    </ul>
+    <label><input type="checkbox" id="agree"> I understand and agree</label>
+    <p><button id="accept" disabled>Continue</button></p>
+  </div>
+</div>
 
 <script>
 const $=s=>document.querySelector(s),$$=s=>document.querySelectorAll(s);
@@ -253,9 +284,10 @@ function render(d){
 async function investigate(v){
   const value=(v||$('#target').value).trim();if(!value)return;
   if(v){$('#target').value=v;$('#ttype').value=''}
+  if(!$('#purpose').value){show('inv');$('#invout').innerHTML='<p class="err">Choose a purpose first (the menu next to the Investigate button). Use this tool only on targets you are entitled to investigate.</p>';$('#purpose').focus();return}
   show('inv');$('#invout').innerHTML='<p class="muted">Running lookups...</p>';
   try{
-    const {id}=await post('/api/jobs',{value,type:$('#ttype').value||undefined,region:$('#region').value.trim().toUpperCase()||undefined});
+    const {id}=await post('/api/jobs',{value,type:$('#ttype').value||undefined,region:$('#region').value.trim().toUpperCase()||undefined,purpose:$('#purpose').value});
     let j;
     do{await sleep(700);j=await api('/api/jobs/'+id);const p=j.progress||{};
       $('#invout').innerHTML=`<p class="muted">Running lookups... ${p.total?`checked ${p.checked||0} / ${p.total} sites`:'(domain lookups can take up to 30 seconds)'}</p>`;
@@ -313,12 +345,17 @@ $('#cases').onchange=async e=>{if(e.target.dataset.note)await api('/api/items/'+
 async function loadConfig(){
   const c=await api('/api/config');
   $('#op').innerHTML=c.encode_ops.map(o=>`<option>${esc(o)}</option>`).join('');
+  $('#purpose').innerHTML='<option value="">Purpose (required)</option>'+Object.entries(c.purposes).map(([k,v])=>`<option value="${esc(k)}">${esc(v)}</option>`).join('');
+  $('#purpose').value=store.get('purpose','');
+  $('#purpose').onchange=e=>store.set('purpose',e.target.value);
+  $('#operator').textContent=c.operator?`Operated by ${c.operator}. `:'';
+  if(c.retention_days)$('#retention').textContent=`Saved cases are deleted after ${c.retention_days} days. `;
   const on=Object.entries(c.keys).filter(([,v])=>v).map(([k])=>k.replace('_API_KEY',''));
   $('#keys').textContent=on.length?'API keys: '+on.join(', '):'No API keys set (see README)';
 }
 $('#runop').onclick=async()=>{try{$('#opout').textContent=(await post('/api/toolbox/encode',{op:$('#op').value,text:$('#optext').value})).result}catch(e){$('#opout').textContent='Error: '+e.message}};
 $('#rundork').onclick=async()=>{const t=$('#dtarget').value.trim();if(!t)return;
-  try{const r=await api('/api/toolbox/dorks?target='+encodeURIComponent(t));
+  try{const r=await post('/api/toolbox/dorks',{target:t});
     $('#dorkout').innerHTML=r.dorks.length?`<p class="muted">Detected: ${esc(r.type)}</p>`+r.dorks.map(d=>`<div><b>${esc(d.label)}</b> <code>${esc(d.query)}</code><br>
       <a href="${esc(d.google)}" target="_blank" rel="noopener noreferrer" style="display:inline">Google</a> &middot;
       <a href="${esc(d.duckduckgo)}" target="_blank" rel="noopener noreferrer" style="display:inline">DuckDuckGo</a> &middot;
@@ -327,6 +364,18 @@ $('#rundork').onclick=async()=>{const t=$('#dtarget').value.trim();if(!t)return;
 $('#runexif').onclick=async()=>{const f=$('#exiffile').files[0];if(!f)return;
   const fd=new FormData();fd.append('file',f);
   try{$('#exifout').textContent=JSON.stringify(await api('/api/toolbox/exif',{method:'POST',body:fd}),null,2)}catch(e){$('#exifout').textContent='Error: '+e.message}};
+
+/* ---------- consent ---------- */
+const CONSENT_V='1';
+if(store.get('consent','')!==CONSENT_V){
+  $('#consent').classList.remove('hide');
+}
+['change','input'].forEach(ev=>$('#agree').addEventListener(ev,e=>{$('#accept').disabled=!e.target.checked}));
+$('#accept').onclick=()=>{
+  store.set('consent',CONSENT_V);
+  $('#consent').classList.add('hide');
+  $('#consent').style.display='none';
+};
 
 applyLang();loadSide();loadConfig();
 </script>

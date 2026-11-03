@@ -29,7 +29,15 @@ SCHEMA = [
     pw TEXT NOT NULL,
     created REAL NOT NULL,
     terms REAL NOT NULL,
-    verified REAL
+    verified REAL,
+    blocked REAL
+)""",
+    """CREATE TABLE IF NOT EXISTS reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created REAL NOT NULL,
+    category TEXT NOT NULL,
+    message TEXT NOT NULL,
+    email TEXT NOT NULL DEFAULT ''
 )""",
     """CREATE TABLE IF NOT EXISTS usage (
     uid INTEGER NOT NULL,
@@ -126,6 +134,8 @@ def _turso_run(stmts: list[tuple[str, tuple]]) -> list[dict]:
             alters.append("ALTER TABLE cases ADD COLUMN user_id INTEGER")
         if "verified" not in names(res[n + 1]):  # created before email confirmation existed
             alters.append("ALTER TABLE users ADD COLUMN verified REAL")
+        if "blocked" not in names(res[n + 1]):  # created before accounts could be blocked
+            alters.append("ALTER TABLE users ADD COLUMN blocked REAL")
         if alters:
             _http_post(url, token, {"requests": [
                 {"type": "execute", "stmt": {"sql": s}} for s in alters] + [{"type": "close"}]})
@@ -162,8 +172,11 @@ def _run(stmts: list[tuple[str, tuple]]) -> list[dict]:
             c.execute(sql)
         if "user_id" not in [r[1] for r in c.execute("PRAGMA table_info(cases)")]:
             c.execute("ALTER TABLE cases ADD COLUMN user_id INTEGER")  # created before accounts existed
-        if "verified" not in [r[1] for r in c.execute("PRAGMA table_info(users)")]:
+        ucols = [r[1] for r in c.execute("PRAGMA table_info(users)")]
+        if "verified" not in ucols:
             c.execute("ALTER TABLE users ADD COLUMN verified REAL")  # created before email verification
+        if "blocked" not in ucols:
+            c.execute("ALTER TABLE users ADD COLUMN blocked REAL")  # created before accounts could be blocked
         for sql, args in stmts:
             cur = c.execute(sql, args)
             out.append({"rows": [dict(r) for r in cur.fetchall()] if cur.description else [],
@@ -294,3 +307,24 @@ def export_user(uid: int) -> dict:
     cases = [get_case(c["id"], uid) for c in list_cases(uid)]
     return {"email": user.get("email"), "created": user.get("created"), "verified": user.get("verified"),
             "terms_accepted": user.get("terms"), "cases": cases}
+
+
+# ---------------------------------------------------------------- abuse reports and blocking
+
+def add_report(category: str, message: str, email: str = "") -> int:
+    return _one("INSERT INTO reports (created, category, message, email) VALUES (?, ?, ?, ?)",
+                (time.time(), category, message, email))["lastrowid"]
+
+
+def list_reports(limit: int = 50) -> list[dict]:
+    return _one("SELECT * FROM reports ORDER BY created DESC LIMIT ?", (limit,))["rows"]
+
+
+def set_blocked(email: str, blocked: bool) -> bool:
+    return _one("UPDATE users SET blocked = ? WHERE email = ?",
+                (time.time() if blocked else None, email.strip().lower()))["rowcount"] > 0
+
+
+def list_users(limit: int = 200) -> list[dict]:
+    return _one("SELECT id, email, created, verified, blocked FROM users ORDER BY created DESC LIMIT ?",
+                (limit,))["rows"]

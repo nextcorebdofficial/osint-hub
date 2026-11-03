@@ -118,3 +118,13 @@ If this instance uses accounts, it stores your **email address**, a **salted has
 We use your email only to send you account messages: the confirmation link and password reset links. We do not send marketing email and we do not sell or share your address. Emails are sent through a third-party email provider chosen by the operator, which therefore sees your address and the message.
 
 Your saved cases belong to your account and are not visible to other users. You can **download everything stored about you** and **delete your account** (which deletes your cases too) from the app header at any time. Accounts that break the Acceptable Use Policy may be removed.
+
+
+## What we do not do
+
+- We use **no analytics, no advertising, no tracking pixels and no third-party scripts** on this site.
+- The **only cookie** is the sign-in cookie. It is needed for the service to work, so there is no cookie banner.
+- We **do not sell, rent or share** your email address or anything you save.
+- We do **not** build profiles of people. By default this instance looks up domains, IP addresses, URLs, crypto addresses and companies only; lookups about individuals are switched off.
+- We do **not** store the targets you investigate in our logs. The audit log keeps only the time, the type, the purpose you chose and a keyed hash that cannot be turned back into the target.
+- Saved cases are deleted automatically after 30 days unless the operator states a different period at the bottom of the page. You can delete them or your whole account yourself at any time.

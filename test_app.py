@@ -335,6 +335,7 @@ def accounts(monkeypatch):
     monkeypatch.delenv("APP_PASSWORD", raising=False)
     monkeypatch.delenv("REGISTRATION", raising=False)
     monkeypatch.setenv("ALLOW_UNVERIFIED", "1")  # no email provider in tests unless a test turns one on
+    monkeypatch.setenv("SAFE_MODE", "0")  # older tests look up phones; the safe-mode tests switch it back on
     for k in ("MAIL_PROVIDER", "MAIL_FROM", "MAIL_API_KEY", "PUBLIC_URL", "DAILY_INVESTIGATIONS"):
         monkeypatch.delenv(k, raising=False)
     main._HITS.clear()
@@ -817,3 +818,136 @@ def test_recon_tools_are_listed_with_an_authorisation_warning():
             assert "permission" in t["description"]  # active scanners say so
     assert "Recon & Attack Surface" in main.TARGET_CATEGORIES["domain"]
     assert "Recon & Attack Surface" in main.TARGET_CATEGORIES["ip"]
+
+
+# ---------------------------------------------------------------- safe mode, abuse reports, blocking
+
+def test_safe_mode_is_on_by_default_for_account_instances(accounts, monkeypatch):
+    monkeypatch.delenv("SAFE_MODE")
+    c = accounts()
+    _signup(c)
+    cfg = c.get("/api/config").json()
+    assert cfg["safe_mode"] is True and set(cfg["target_types"]) == {"domain", "ip", "url", "crypto", "company"}
+    for body in ({"value": "someuser", "type": "username"}, {"value": "a@b.co"}, {"value": "+8801712345678"}):
+        r = c.post("/api/investigate", json={**body, "purpose": P})
+        assert r.status_code == 400 and "individuals" in r.json()["detail"], body
+        assert c.post("/api/jobs", json={**body, "purpose": P}).status_code == 400
+    assert c.post("/api/toolbox/dorks", json={"target": "someuser"}).status_code == 400
+    assert c.post("/api/toolbox/dorks", json={"target": "example.com"}).status_code == 200
+    assert "example" in c.get("/").text and "usernames" not in c.get("/").text.split("<main")[0]
+
+
+def test_safe_mode_allows_organisation_targets(accounts, monkeypatch):
+    monkeypatch.delenv("SAFE_MODE")
+
+    async def fake(client, value):
+        return {"ok": True}
+
+    monkeypatch.setattr(main.lookups, "lookup_crypto", fake)
+    c = accounts()
+    _signup(c)
+    r = c.post("/api/investigate", json={"value": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa", "purpose": P})
+    assert r.status_code == 200 and r.json()["type"] == "crypto"
+
+
+def test_safe_mode_can_be_switched_off_for_self_hosting(accounts, monkeypatch):
+    monkeypatch.setenv("SAFE_MODE", "0")
+    c = accounts()
+    _signup(c)
+    assert c.get("/api/config").json()["safe_mode"] is False
+    assert c.post("/api/investigate", json={"value": "+8801712345678", "purpose": P}).status_code == 200
+    assert main.safe_mode() is False
+    monkeypatch.delenv("AUTH_MODE")
+    monkeypatch.delenv("SAFE_MODE")
+    assert main.safe_mode() is False  # a private, login-less instance keeps every lookup
+
+
+def test_abuse_report_is_saved_and_emailed_without_login(accounts, monkeypatch):
+    sent = []
+    monkeypatch.setenv("OPERATOR_CONTACT", "support@example.org")
+    monkeypatch.setenv("MAIL_PROVIDER", "resend")
+    monkeypatch.setenv("MAIL_API_KEY", "k")
+    monkeypatch.setenv("MAIL_FROM", "x <no-reply@example.org>")
+    monkeypatch.setattr(main.mailer, "send", lambda to, subject, text, html="": sent.append((to, subject, text)) or True)
+    c = accounts()
+    assert c.get("/report").status_code == 200
+    data = {"category": "harassment", "message": "Someone is using this to track me, see case on 3 Nov.",
+            "email": "victim@example.com"}
+    r = c.post("/report", data=data)
+    assert r.status_code == 200 and "Report received" in r.text
+    saved = db.list_reports()
+    assert saved[0]["category"] == "harassment" and saved[0]["email"] == "victim@example.com"
+    assert sent[0][0] == "support@example.org" and "track me" in sent[0][2] and "victim@example.com" in sent[0][2]
+
+
+def test_abuse_report_validation_and_honeypot(accounts):
+    c = accounts()
+    assert c.post("/report", data={"category": "harassment", "message": "too short"}).status_code == 400
+    assert c.post("/report", data={"category": "nope", "message": "x" * 40}).status_code == 400
+    assert c.post("/report", data={"category": "other", "message": "x" * 40, "email": "bad"}).status_code == 400
+    before = len(db.list_reports())
+    bot = c.post("/report", data={"category": "other", "message": "x" * 40, "website": "http://spam"})
+    assert bot.status_code == 200 and len(db.list_reports()) == before  # a bot is thanked but nothing is stored
+
+
+def test_blocked_accounts_are_signed_out_and_cannot_sign_in(accounts):
+    c = accounts()
+    _signup(c)
+    assert c.get("/api/tools").status_code == 200
+    assert db.set_blocked("a@example.com", True)
+    main._USERS.clear()  # the cache normally expires within a minute
+    assert c.get("/api/tools").status_code == 401
+    r = accounts().post("/login", data={"email": "a@example.com", "password": PW})
+    assert r.status_code == 403 and "Account disabled" in r.text
+    db.set_blocked("a@example.com", False)
+    main._USERS.clear()
+    assert accounts().post("/login", data={"email": "a@example.com", "password": PW}, follow_redirects=False).status_code == 303
+
+
+def test_old_databases_gain_the_new_columns(tmp_path, monkeypatch):
+    import sqlite3
+    path = str(tmp_path / "old.db")
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL UNIQUE, "
+                "pw TEXT NOT NULL, created REAL NOT NULL, terms REAL NOT NULL)")
+    con.execute("INSERT INTO users (email, pw, created, terms) VALUES ('old@example.com', 'h', 1, 1)")
+    con.commit()
+    con.close()
+    monkeypatch.setenv("DB_PATH", path)
+    u = db.get_user_by_email("old@example.com")
+    assert u["verified"] is None and u["blocked"] is None
+    assert db.set_blocked("old@example.com", True) and db.get_user(u["id"])["blocked"]
+
+
+def test_admin_script(accounts, capsys):
+    import admin
+    c = accounts()
+    _signup(c)
+    db.add_report("other", "a report body that is long enough")
+    assert admin.main(["users"]) == 0 and "a@example.com" in capsys.readouterr().out
+    assert admin.main(["reports"]) == 0 and "a report body" in capsys.readouterr().out
+    assert admin.main(["block", "A@Example.com"]) == 0 and db.get_user_by_email("a@example.com")["blocked"]
+    assert admin.main(["unblock", "a@example.com"]) == 0 and not db.get_user_by_email("a@example.com")["blocked"]
+    assert admin.main(["delete", "a@example.com"]) == 0 and db.get_user_by_email("a@example.com") is None
+    assert admin.main(["block", "nobody@example.com"]) == 1
+
+
+def test_account_instances_keep_cases_30_days_by_default(accounts, monkeypatch):
+    monkeypatch.delenv("CASE_RETENTION_DAYS", raising=False)
+    assert main.retention_days() == 30
+    monkeypatch.setenv("CASE_RETENTION_DAYS", "0")
+    assert main.retention_days() == 0  # the operator can keep everything on purpose
+    monkeypatch.setenv("CASE_RETENTION_DAYS", "7")
+    assert main.retention_days() == 7
+    monkeypatch.delenv("CASE_RETENTION_DAYS")
+    monkeypatch.delenv("AUTH_MODE")
+    assert main.retention_days() == 0  # a private instance keeps data until you delete it
+
+
+def test_signup_asks_for_18_plus_and_policies_state_what_we_do_not_do(accounts):
+    c = accounts()
+    assert "I am 18 or older" in c.get("/register").text
+    privacy = c.get("/legal/privacy").text
+    assert "no analytics" in privacy and "only cookie" in privacy and "do not sell" in privacy
+    terms = c.get("/legal/terms").text
+    assert "Organisations and infrastructure only" in terms and "/report" in terms

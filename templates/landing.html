@@ -6,7 +6,7 @@
 <title>OSINT Hub by {{ brand }} - open-source investigation toolkit</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <meta name="theme-color" content="#7c3aed">
-<meta name="description" content="{{ total }} open-source intelligence tools in one place, with built-in lookups for domains, IPs, emails, usernames, phone numbers and more. Free and open source.">
+<meta name="description" content="{{ total }} open-source intelligence tools in one place, with built-in lookups for domains, IP addresses, URLs, crypto addresses and companies. Free and open source.">
 <style nonce="{{ nonce }}">
   :root{--bg:#f6f7f9;--card:#fff;--text:#1b1f24;--muted:#5d6672;--line:#dde1e6;--accent:#7c3aed;--ok:#1a7f37;--warn:#9a6700;--bad:#cf222e}
   @media (prefers-color-scheme:dark){:root{--bg:#0e1116;--card:#161b22;--text:#e6edf3;--muted:#8b949e;--line:#2b323b;--accent:#a78bfa;--ok:#3fb950;--warn:#d29922;--bad:#f85149}}
@@ -70,7 +70,7 @@
 
   <section class="hero">
     <h1 data-t="h1">Every open-source investigation tool, in one place.</h1>
-    <p data-t="sub">Look up domains, IP addresses, emails, usernames, phone numbers and more. Keep notes in private cases and export a report. Free, open source and built to be used responsibly.</p>
+    <p data-t="sub">Look up domains, IP addresses, URLs, crypto addresses and companies. Keep notes in private cases and export a report. Free, open source and built to be used responsibly.</p>
     <div class="cta">
       {% if signed_in %}
         <a class="btn" href="/app" data-t="open">Open the app</a>
@@ -93,7 +93,7 @@
   <h2 data-t="fh">What you get</h2>
   <p class="lead" data-t="fl">Everything is in your browser. No software to install.</p>
   <div class="grid">
-    <div class="card"><h3 data-t="f1h">Investigate</h3><p data-t="f1p">Paste a domain, IP, email, username, phone, URL, crypto address or company. The type is detected automatically and lookups run for you.</p></div>
+    <div class="card"><h3 data-t="f1h">Investigate</h3><p data-t="f1p">Paste a domain, IP address, URL, crypto address or company. The type is detected automatically and lookups run for you.</p></div>
     <div class="card"><h3 data-t="f2h">Browse the catalog</h3><p data-t="f2p">Search and filter {{ total }} tools from the OSINT Framework by category, price and whether they have an API.</p></div>
     <div class="card"><h3 data-t="f3h">Private cases</h3><p data-t="f3p">Save results with your notes. Cases belong to your account only. Export as Markdown, JSON or a printable report.</p></div>
     <div class="card"><h3 data-t="f4h">Toolbox</h3><p data-t="f4p">Encode, decode and hash text, generate search dorks and read photo metadata, all without leaving the page.</p></div>
@@ -128,7 +128,7 @@
 
   <footer>
     <div>
-      <a href="/legal/terms">Terms</a><a href="/legal/privacy">Privacy</a><a href="/legal/acceptable-use">Acceptable use</a><a href="/legal/disclaimer">Disclaimer</a><a href="{{ repo }}" rel="noopener">GitHub</a>
+      <a href="/legal/terms">Terms</a><a href="/legal/privacy">Privacy</a><a href="/legal/acceptable-use">Acceptable use</a><a href="/legal/disclaimer">Disclaimer</a><a href="/report">Report abuse</a><a href="{{ repo }}" rel="noopener">GitHub</a>
     </div>
     <p>{% if operator %}Operated by {{ operator }}. {% endif %}&copy; 2026 {{ brand }}. OSINT Hub is open-source software (MIT). The catalog is based on the OSINT Framework. No warranty; you are responsible for how you use it.</p>
   </footer>
@@ -137,10 +137,10 @@
 <script nonce="{{ nonce }}">
 const bn={source:'সোর্স কোড',open:'অ্যাপ খুলুন',signin:'সাইন ইন',join:'অ্যাকাউন্ট খুলুন',start:'শুরু করুন, বিনামূল্যে',
 h1:'সব ওপেন-সোর্স ইনভেস্টিগেশন টুল, এক জায়গায়।',
-sub:'ডোমেইন, আইপি, ইমেইল, ইউজারনেম, ফোন নম্বর এবং আরও অনেক কিছু খুঁজে দেখুন। নিজের প্রাইভেট কেসে নোট রাখুন ও রিপোর্ট নামান। বিনামূল্যে, ওপেন সোর্স এবং দায়িত্বশীল ব্যবহারের জন্য তৈরি।',
+sub:'ডোমেইন, আইপি অ্যাড্রেস, ইউআরএল, ক্রিপ্টো অ্যাড্রেস ও কোম্পানি খুঁজে দেখুন। নিজের প্রাইভেট কেসে নোট রাখুন ও রিপোর্ট নামান। বিনামূল্যে, ওপেন সোর্স এবং দায়িত্বশীল ব্যবহারের জন্য তৈরি।',
 s1:'টি টুলের ক্যাটালগ',s2:'টি ক্যাটাগরি',s3:'ধরনের টার্গেটে বিল্ট-ইন লুকআপ',s4:'টার্গেট লগে সংরক্ষিত',
 fh:'আপনি যা পাবেন',fl:'সবকিছু ব্রাউজারেই। কিছু ইনস্টল করতে হয় না।',
-f1h:'অনুসন্ধান',f1p:'ডোমেইন, আইপি, ইমেইল, ইউজারনেম, ফোন, ইউআরএল, ক্রিপ্টো অ্যাড্রেস বা কোম্পানি পেস্ট করুন। ধরন নিজে থেকে চেনা হয়।',
+f1h:'অনুসন্ধান',f1p:'ডোমেইন, আইপি, ইউআরএল, ক্রিপ্টো অ্যাড্রেস বা কোম্পানি পেস্ট করুন। ধরন নিজে থেকে চেনা হয়।',
 f2h:'ক্যাটালগ ঘুরে দেখুন',f2p:'ক্যাটাগরি, দাম ও এপিআই অনুযায়ী টুল খুঁজুন ও ফিল্টার করুন।',
 f3h:'প্রাইভেট কেস',f3p:'নোটসহ ফলাফল সংরক্ষণ করুন। কেস শুধু আপনার অ্যাকাউন্টের। Markdown, JSON বা প্রিন্টযোগ্য রিপোর্টে এক্সপোর্ট করুন।',
 f4h:'টুলবক্স',f4p:'টেক্সট এনকোড, ডিকোড ও হ্যাশ করুন, সার্চ ডর্ক বানান এবং ছবির মেটাডেটা পড়ুন।',

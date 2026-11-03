@@ -20,6 +20,7 @@ cp .env.example .env
 | `PUBLIC_URL` | empty | The site's public address, for example `https://osint.example.org`. Required on Vercel: email links are built from it, never from the Host header. |
 | `MAIL_PROVIDER`, `MAIL_FROM`, `MAIL_API_KEY` | empty | Email for confirmation and reset links. Provider is `resend`, `brevo` or `smtp` (then use `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`). Accounts need this unless `ALLOW_UNVERIFIED=1` (self-hosting only, skips email confirmation). |
 | `BRAND_NAME` | `NextCore BD` | Name in the header, home page, emails and legal pages. |
+| `SAFE_MODE` | on with `AUTH_MODE=accounts` | `1`/`0`. On: only domains, IPs, URLs, crypto addresses and companies can be investigated (no usernames, emails or phone numbers). |
 | `OPERATOR_NAME`, `OPERATOR_CONTACT`, `OPERATOR_JURISDICTION` | empty | Who runs this instance. Filled into the `/legal/*` pages. Until all three are set, those pages show a warning. Required if other people use your instance. |
 | `CASE_RETENTION_DAYS` | 0 (keep forever) | Delete saved cases and items older than this many days, at every start. 30 is a good value for shared instances. |
 | `AUDIT_LOG` | `audit.log` next to `main.py` | One JSON line per investigation: time, target type, purpose and a keyed hash of the target. Never the target or IP. Set to empty to turn it off. |

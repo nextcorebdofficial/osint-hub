@@ -161,7 +161,8 @@
   <span id="operator"></span><span id="retention"></span>
   Use only on targets you are entitled to investigate. No facial recognition, no scanning, no ownership look-up of phone numbers.
   <a href="/legal/terms">Terms</a> &middot; <a href="/legal/privacy">Privacy</a> &middot;
-  <a href="/legal/acceptable-use">Acceptable use</a> &middot; <a href="/legal/disclaimer">Disclaimer</a>
+  <a href="/legal/acceptable-use">Acceptable use</a> &middot; <a href="/legal/disclaimer">Disclaimer</a> &middot;
+  <a href="/report">Report abuse</a>
 </footer>
 
 <div id="consent" class="modal hide" role="dialog" aria-modal="true" aria-labelledby="ctitle">
@@ -363,6 +364,17 @@ async function loadConfig(){
   if(c.user){
     $('#acct').textContent=c.user;['#home','#export','#delacct','#logout'].forEach(s=>$(s).classList.remove('hide'));
   }else if(c.auth_mode==='password'){$('#logout').classList.remove('hide')}
+  if(c.safe_mode){
+    const nm={domain:['domain','ডোমেইন'],ip:['IP','IP'],url:['URL','URL'],crypto:['crypto address','ক্রিপ্টো ঠিকানা'],company:['company','কোম্পানি'],
+      email:['email','ইমেইল'],username:['username','username'],phone:['phone','ফোন']};
+    const ok=new Set(c.target_types);
+    [...$('#ttype').options].forEach(o=>{if(o.value&&!ok.has(o.value))o.remove()});
+    I18N.en.ph='Investigate: '+c.target_types.map(k=>nm[k][0]).join(', ')+'...';
+    I18N.bn.ph='অনুসন্ধান: '+c.target_types.map(k=>nm[k][1]).join(', ')+'...';
+    if(!ok.has('phone'))$('#region').classList.add('hide');
+    applyLang();
+    $('#retention').textContent+='This instance looks up organisations and infrastructure only; lookups about individuals are turned off. ';
+  }
   casesOn=c.cases!==false;if(!casesOn)$('#t-cases').style.display='none';
   $('#operator').textContent=c.operator?`Operated by ${c.operator}. `:'';
   if(c.retention_days)$('#retention').textContent=`Saved cases are deleted after ${c.retention_days} days. `;

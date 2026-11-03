@@ -76,3 +76,12 @@ These terms are governed by the laws of [JURISDICTION]. Courts there have the au
 ## 15. Contact
 
 [OPERATOR_NAME], [OPERATOR_CONTACT]
+
+
+## Reporting abuse and removal
+
+If you think this service is being used to harm someone, or your own data appears here, tell us at [/report](/report). We review reports and may remove saved data, disable accounts and refuse service to anyone who breaks these terms, without notice and without refund. We may also keep the minimum information needed to stop the same person returning.
+
+## Organisations and infrastructure only
+
+This instance is built to look up organisations and infrastructure: domains, IP addresses, URLs, crypto addresses and companies. It does not offer lookups about individuals. Do not use it to find, follow or contact a private person, and do not enter personal data into it.

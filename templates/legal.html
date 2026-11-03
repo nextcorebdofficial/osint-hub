@@ -25,7 +25,7 @@
 </head>
 <body>
 <main>
-  <nav style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">{{ logo(24) }}<a href="/">&larr; {{ brand }} OSINT Hub</a><a href="/legal/terms">Terms</a><a href="/legal/privacy">Privacy</a><a href="/legal/acceptable-use">Acceptable use</a><a href="/legal/disclaimer">Disclaimer</a></nav>
+  <nav style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">{{ logo(24) }}<a href="/">&larr; {{ brand }} OSINT Hub</a><a href="/legal/terms">Terms</a><a href="/legal/privacy">Privacy</a><a href="/legal/acceptable-use">Acceptable use</a><a href="/legal/disclaimer">Disclaimer</a><a href="/report">Report abuse</a></nav>
   {% if not configured %}<p class="warn">The operator of this instance has not filled in their name, contact and jurisdiction (OPERATOR_NAME, OPERATOR_CONTACT, OPERATOR_JURISDICTION). Placeholders in square brackets are still visible below.</p>{% endif %}
   {{ body|safe }}
 </main>

@@ -127,13 +127,40 @@ def _flatten(node: dict, path: list[str]) -> None:
 
 
 _flatten(TREE, [])
+
+
+def _add_extra_tools() -> int:
+    """Merge extra_tools.json, which survives update_data.py replacing data.json. A tool is skipped only
+    when the same address is already listed in the same category."""
+    p = BASE / "extra_tools.json"
+    if not p.exists():
+        return 0
+    added = 0
+    seen = {(t["url"].rstrip("/").lower(), t["category"]) for t in TOOLS}
+    for e in json.loads(p.read_text(encoding="utf-8")):
+        if (e["url"].rstrip("/").lower(), e["category"]) in seen:
+            continue
+        TOOLS.append({
+            "id": len(TOOLS), "name": e["name"], "url": e["url"], "description": e.get("description", ""),
+            "category": e["category"], "path": e["category"], "pricing": e.get("pricing", ""), "opsec": "",
+            "local": bool(e.get("local")), "api": bool(e.get("api")), "dork": False,
+            "registration": bool(e.get("registration")), "deprecated": False, "status": ""})
+        added += 1
+    return added
+
+
+BASE_TOOLS = len(TOOLS)
+EXTRA_TOOLS = _add_extra_tools()
 CATEGORIES = sorted({t["category"] for t in TOOLS})
 
 TARGET_CATEGORIES = {
-    "username": ["Username", "Social Networks", "Online Communities", "Dating", "Instant Messaging"],
-    "email": ["Email Address", "Social Networks"],
-    "domain": ["Domain Name", "Cloud Infrastructure", "Cyber Threat Intelligence", "Archives"],
-    "ip": ["IP & MAC Address", "Cyber Threat Intelligence", "Geolocation Tools / Maps"],
+    "username": ["Username", "Social Networks", "Online Communities", "Dating", "Instant Messaging",
+                 "Automated Engines & Suites"],
+    "email": ["Email Address", "Social Networks", "Automated Engines & Suites"],
+    "domain": ["Domain Name", "Cloud Infrastructure", "Cyber Threat Intelligence", "Archives",
+               "Automated Engines & Suites"],
+    "ip": ["IP & MAC Address", "Cyber Threat Intelligence", "Geolocation Tools / Maps",
+           "Automated Engines & Suites"],
     "phone": ["Telephone Numbers", "Instant Messaging"],
     "url": ["Domain Name", "Archives", "Malicious File Analysis", "Disinformation & Media Verification"],
     "crypto": ["Blockchain & Cryptocurrency"],

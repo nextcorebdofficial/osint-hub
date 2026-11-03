@@ -11,7 +11,8 @@ import httpx
 import phonenumbers
 from phonenumbers import carrier, geocoder, timezone
 
-KEY_NAMES = ["HIBP_API_KEY", "SHODAN_API_KEY", "VIRUSTOTAL_API_KEY", "ABUSEIPDB_API_KEY"]
+KEY_NAMES = ["HIBP_API_KEY", "SHODAN_API_KEY", "VIRUSTOTAL_API_KEY", "ABUSEIPDB_API_KEY",
+             "SECURITYTRAILS_API_KEY"]
 
 
 def env(name: str) -> str:
@@ -80,13 +81,39 @@ async def vt_lookup(client, kind: str, value: str) -> dict:
             "link": f"https://www.virustotal.com/gui/{kind}/{value}"}
 
 
+async def securitytrails(client, domain: str) -> dict:
+    key = env("SECURITYTRAILS_API_KEY")
+    if not key:
+        return {"info": "set SECURITYTRAILS_API_KEY to enable"}
+    h = {"APIKEY": key, "Accept": "application/json"}
+    base = "https://api.securitytrails.com/v1"
+    subs, hist = await asyncio.gather(
+        _get_json(client, f"{base}/domain/{domain}/subdomains",
+                  params={"children_only": "false", "include_inactive": "true"}, headers=h),
+        _get_json(client, f"{base}/history/{domain}/dns/a", headers=h))
+    if subs is None and hist is None:
+        return {"error": "request failed (check the key and your plan's limits)"}
+    out = {}
+    if subs:
+        names = sorted(f"{s}.{domain}" for s in subs.get("subdomains", []))
+        out["subdomains"] = names[:500]
+        out["subdomain_count"] = len(names)
+    if hist:
+        out["a_record_history"] = [
+            {"ips": [v.get("ip") for v in r.get("values", [])], "first_seen": r.get("first_seen"),
+             "last_seen": r.get("last_seen"), "organizations": r.get("organizations")}
+            for r in hist.get("records", [])[:20]]
+    return out
+
+
 async def lookup_domain(client, domain: str) -> dict:
-    dns, rdap, crt, wb, vt = await asyncio.gather(
+    dns, rdap, crt, wb, vt, st = await asyncio.gather(
         dns_records(client, domain),
         _get_json(client, f"https://rdap.org/domain/{domain}", follow_redirects=True),
         _get_json(client, "https://crt.sh/", params={"q": f"%.{domain}", "output": "json"}, timeout=25),
         wayback(client, domain),
         vt_lookup(client, "domain", domain),
+        securitytrails(client, domain),
     )
     out = {"dns": dns}
     if rdap:
@@ -108,6 +135,7 @@ async def lookup_domain(client, domain: str) -> dict:
         out["subdomains_crtsh"] = sorted(subs)
     out["wayback"] = wb
     out["virustotal"] = vt
+    out["securitytrails"] = st
     return out
 
 

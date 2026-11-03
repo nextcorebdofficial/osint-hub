@@ -32,7 +32,7 @@ def test_detect_type(value, kind):
 
 def test_catalog_complete_and_face_search_excluded():
     r = client.get("/api/tools?limit=2000").json()
-    assert r["total"] == 1165
+    assert main.BASE_TOOLS == 1165 and r["total"] == 1165 + main.EXTRA_TOOLS
     urls = " ".join(t["url"] for t in r["items"])
     for banned in ("facecheck.id", "pimeyes.com", "lenso.ai", "faceseek"):
         assert banned not in urls
@@ -735,3 +735,49 @@ def test_browser_form_posts_work_with_the_real_headers_browsers_send(accounts):
     sameSite = c.post("/login", data={"email": "b@example.com", "password": PW}, headers={"sec-fetch-site": "same-site"})
     assert sameSite.status_code == 403  # a sibling subdomain is not us
     assert client.get("/login").headers["referrer-policy"] == "same-origin"
+
+
+# ---------------------------------------------------------------- extra catalog entries, SecurityTrails
+
+def test_extra_tools_are_merged_into_the_catalog_without_duplicates():
+    cats = {c["name"]: c["count"] for c in client.get("/api/categories").json()}
+    assert cats["Directories & Catalogs"] == 6 and cats["Automated Engines & Suites"] >= 4
+    names = [t["name"] for t in client.get("/api/tools?category=Directories%20%26%20Catalogs&limit=50").json()["items"]]
+    assert "IntelTechniques Tools" in names and "OSINT.link" in names
+    key = lambda t: (t["url"].rstrip("/").lower(), t["category"])
+    base, extra = {key(t) for t in main.TOOLS[:main.BASE_TOOLS]}, [key(t) for t in main.TOOLS[main.BASE_TOOLS:]]
+    assert len(extra) == len(set(extra)) and not base & set(extra)  # extras never repeat a listed tool
+    assert [t["id"] for t in main.TOOLS] == list(range(len(main.TOOLS)))
+    assert "Automated Engines & Suites" in main.TARGET_CATEGORIES["domain"]
+
+
+def test_vercel_ships_the_extra_catalog_file():
+    cfg = json.load(open(os.path.join(os.path.dirname(main.__file__), "vercel.json"), encoding="utf-8"))
+    assert "extra_tools.json" in cfg["builds"][0]["config"]["includeFiles"]
+
+
+def test_securitytrails_lookup(monkeypatch):
+    monkeypatch.delenv("SECURITYTRAILS_API_KEY", raising=False)
+    assert "set SECURITYTRAILS_API_KEY" in asyncio.run(lookups.securitytrails(None, "a.com"))["info"]
+    monkeypatch.setenv("SECURITYTRAILS_API_KEY", "k")
+    seen = []
+
+    async def fake(client, url, **kw):
+        seen.append((url, kw.get("headers", {}).get("APIKEY")))
+        if url.endswith("/subdomains"):
+            return {"subdomains": ["www", "api"]}
+        return {"records": [{"values": [{"ip": "1.2.3.4"}], "first_seen": "2020-01-01", "last_seen": "2021-01-01",
+                             "organizations": ["Org"]}]}
+
+    monkeypatch.setattr(lookups, "_get_json", fake)
+    out = asyncio.run(lookups.securitytrails(None, "a.com"))
+    assert out["subdomains"] == ["api.a.com", "www.a.com"] and out["subdomain_count"] == 2
+    assert out["a_record_history"][0]["ips"] == ["1.2.3.4"]
+    assert all(k == "k" for _, k in seen)
+
+    async def down(client, url, **kw):
+        return None
+
+    monkeypatch.setattr(lookups, "_get_json", down)
+    assert "request failed" in asyncio.run(lookups.securitytrails(None, "a.com"))["error"]
+    assert lookups.configured_keys()["SECURITYTRAILS_API_KEY"] is True

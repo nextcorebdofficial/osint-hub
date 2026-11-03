@@ -10,6 +10,11 @@ All notable changes are listed here. Format based on [Keep a Changelog](https://
 - Per-account private cases, data export and account deletion, daily investigation cap, invite-only or closed registration
 - Security hardening: nonce-based CSP, HSTS, same-origin check on writes, request size limits, sign-in lockout, no Host-header links in emails, `security.txt`, `robots.txt`
 - NextCore BD branding (`BRAND_NAME`)
+- Catalog additions in `extra_tools.json`: directories (IntelTechniques, OSINT.link, Awesome OSINT, Bellingcat toolkit, Start.me) and automated engines (SpiderFoot, Recon-ng, Maltego, WhatsMyName, Maigret), plus SecurityTrails
+- Optional SecurityTrails lookup (`SECURITYTRAILS_API_KEY`): subdomains and A-record history for domains
+
+### Fixed
+- Sign-up and sign-in were blocked in browsers because `Referrer-Policy: no-referrer` made them send `Origin: null`; the same-origin check now uses `Sec-Fetch-Site`
 
 ### Added
 - Required purpose for every investigation, with an audit log that stores a keyed hash of the target, never the target or IP (`AUDIT_LOG`)

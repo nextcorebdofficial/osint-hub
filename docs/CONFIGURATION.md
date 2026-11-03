@@ -33,6 +33,7 @@ cp .env.example .env
 | `SHODAN_API_KEY` | empty | Shodan host data for IPs |
 | `VIRUSTOTAL_API_KEY` | empty | VirusTotal reputation for domains and IPs |
 | `ABUSEIPDB_API_KEY` | empty | AbuseIPDB reports for IPs |
+| `SECURITYTRAILS_API_KEY` | empty | SecurityTrails subdomains and A-record history for domains |
 | `SEC_USER_AGENT` | `OSINT-Hub/1.0 admin@localhost` | SEC EDGAR asks for a contact in the User-Agent. Use your own, for example `MyOrg admin@example.com`. |
 
 Keys are never sent to the browser. `/api/config` only says whether each one is set.

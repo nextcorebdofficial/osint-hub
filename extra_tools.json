@@ -1,0 +1,28 @@
+[
+  {"name": "OSINT Framework", "url": "https://osintframework.com/", "category": "Directories & Catalogs",
+   "description": "The classic tree of free OSINT tools by category. This hub's catalog started from it.", "pricing": "free"},
+  {"name": "IntelTechniques Tools", "url": "https://inteltechniques.com/tools/", "category": "Directories & Catalogs",
+   "description": "Michael Bazzell's custom search tools and workflows for people, usernames, domains, vehicles and more.", "pricing": "free"},
+  {"name": "OSINT.link", "url": "https://osint.link/", "category": "Directories & Catalogs",
+   "description": "A large categorised bookmark directory of OSINT sites and resources.", "pricing": "free"},
+  {"name": "Awesome OSINT", "url": "https://github.com/jivoi/awesome-osint", "category": "Directories & Catalogs",
+   "description": "The biggest curated GitHub list of OSINT tools, bookmarks, APIs and tutorials, sorted by category.", "pricing": "free"},
+  {"name": "Bellingcat Online Investigations Toolkit", "url": "https://bellingcat.gitbook.io/toolkit", "category": "Directories & Catalogs",
+   "description": "Bellingcat's own directory of tools for investigative journalism, geolocation and image or map analysis.", "pricing": "free"},
+  {"name": "Start.me", "url": "https://start.me/", "category": "Directories & Catalogs",
+   "description": "Public dashboards where researchers share thousands of OSINT links. Search for OSINT boards.", "pricing": "free"},
+
+  {"name": "SpiderFoot", "url": "https://github.com/smicallef/spiderfoot", "category": "Automated Engines & Suites",
+   "description": "Automated OSINT engine: give it an IP, domain or email and it queries 100+ sources and graphs the result. Self-hosted.", "pricing": "free", "local": true},
+  {"name": "Recon-ng", "url": "https://github.com/lanmaster53/recon-ng", "category": "Automated Engines & Suites",
+   "description": "Python web reconnaissance framework with modules and API keys, driven from the command line.", "pricing": "free", "local": true},
+  {"name": "Maltego", "url": "https://www.maltego.com/", "category": "Automated Engines & Suites",
+   "description": "Visual link analysis: pivot between entities and see the relationship graph. Free community edition with limits.", "pricing": "freemium"},
+  {"name": "WhatsMyName", "url": "https://github.com/WebBreacher/WhatsMyName", "category": "Automated Engines & Suites",
+   "description": "Username enumeration data and scripts across hundreds of sites. This hub's username scan uses its list.", "pricing": "free", "local": true},
+  {"name": "Maigret", "url": "https://github.com/soxoj/maigret", "category": "Automated Engines & Suites",
+   "description": "Builds a profile dossier from a username by checking thousands of sites. Self-hosted.", "pricing": "free", "local": true},
+
+  {"name": "SecurityTrails", "url": "https://securitytrails.com/", "category": "Domain Name",
+   "description": "Historical DNS records and subdomain mapping. This hub can query its API when SECURITYTRAILS_API_KEY is set.", "pricing": "freemium", "api": true, "registration": true}
+]
